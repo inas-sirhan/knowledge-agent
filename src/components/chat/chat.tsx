@@ -188,6 +188,11 @@ function MessageBubble({ message }: { message: UIMessage }) {
   // Tool invocations (for the recommendation tool) — show a compact card per call.
   const toolCalls = message.parts.filter((p) => typeof p.type === "string" && p.type.startsWith("tool-"));
 
+  // The AI SDK can produce a transient "data-only" assistant message envelope when
+  // we write a data part before the model starts streaming. Don't render those —
+  // their data parts are also attached to the real assistant message that follows.
+  if (!isUser && !text && toolCalls.length === 0) return null;
+
   return (
     <div className={cn("flex flex-col gap-2", isUser ? "items-end" : "items-start")}>
       <div
