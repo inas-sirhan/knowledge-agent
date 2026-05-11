@@ -9,7 +9,6 @@
  *
  * Run after `npm run seed`.
  */
-import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { admin, SEED_USERS, SUPABASE_URL, ANON_KEY } from "./_lib";
 

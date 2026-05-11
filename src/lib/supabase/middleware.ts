@@ -31,10 +31,13 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // IMPORTANT: do not put logic between createServerClient and getUser().
+  // Use getSession() in middleware — it's local-only (decodes the JWT from the
+  // cookie) and avoids a network round-trip to Supabase for every request. The
+  // page/route handlers still call getUser() when they need a verified user.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   const { pathname } = request.nextUrl;
 

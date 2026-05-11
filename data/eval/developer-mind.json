@@ -1,7 +1,0 @@
-[
-  { "q": "I feel like a fraud since I started using AI to write code. What should I do?", "expects": ["imposter", "feeling", "normal", "experience"] },
-  { "q": "How do I know if I'm burning out?", "expects": ["burnout", "signs", "rest"] },
-  { "q": "What lessons here apply to a first-time tech lead?", "expects": ["[1]", "[2]"] },
-  { "q": "Recommend something to read tonight if I just bombed a code review.", "expects": ["[1]"] },
-  { "q": "What's the best framework for migrating a Postgres database?", "expects": ["don't know", "doesn't", "outside", "knowledge base", "off-topic"] }
-]

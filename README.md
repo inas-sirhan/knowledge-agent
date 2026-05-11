@@ -11,8 +11,8 @@ and per-account isolation.
 
 | User | Email | Password | Knowledge base |
 |------|-------|----------|----------------|
-| A | `alice@demo.local` | `demo-password-A!` | _AI & the Programmer_ — essays on how AI tools change the craft of programming |
-| B | `bob@demo.local` | `demo-password-B!` | _Developer Mind_ — imposter syndrome, burnout, and identity for software engineers |
+| A | `alice@demo.local` | `demo-password-A!` | _AI & the Programmer_ — essays on AI tools, LLM-assisted development, model evals (Simon Willison archive) |
+| B | `bob@demo.local` | `demo-password-B!` | _Muscle Building_ — hypertrophy, diet for lean gains, supplements (Stronger By Science + Renaissance Periodization + a curated supplement catalog with prices, doses, time-to-effect, evidence levels) |
 
 Switching accounts visibly changes persona, sources, and recommendations. Cross-user reads are
 blocked at the database layer by Postgres RLS — see `npm run test:isolation`.

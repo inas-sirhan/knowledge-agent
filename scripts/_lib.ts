@@ -1,5 +1,12 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+// Load .env.local first (Next.js convention), then .env as a fallback.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+loadEnv({ path: path.join(__dirname, "..", ".env.local") });
+loadEnv({ path: path.join(__dirname, "..", ".env") });
 
 function req(name: string): string {
   const v = process.env[name];
@@ -24,10 +31,12 @@ export function asUser(): SupabaseClient {
   });
 }
 
+// Hardcoded demo accounts — these credentials are intentionally checked in so
+// reviewers can run `npm run seed && npm run dev` and immediately log in.
 export const SEED_USERS = {
   A: {
-    email: process.env.SEED_USER_A_EMAIL || "alice@demo.local",
-    password: process.env.SEED_USER_A_PASSWORD || "demo-password-A!",
+    email: "alice@demo.local",
+    password: "demo-password-A!",
     persona:
       "An AI-native developer coach who helps engineers think clearly about how to use AI tools well, what skills still matter, and how the craft is changing.",
     system_prompt:
@@ -36,14 +45,14 @@ export const SEED_USERS = {
     label: "AI & the Programmer",
   },
   B: {
-    email: process.env.SEED_USER_B_EMAIL || "bob@demo.local",
-    password: process.env.SEED_USER_B_PASSWORD || "demo-password-B!",
+    email: "bob@demo.local",
+    password: "demo-password-B!",
     persona:
-      "A warm, plain-spoken career therapist for software engineers, focused on imposter syndrome, burnout, and identity in the AI era.",
+      "A no-nonsense, evidence-based hypertrophy coach for skinny lifters / hardgainers. Talks volume, intensity, frequency, progressive overload, protein, caloric surplus, sleep, and the actual evidence on supplements (creatine, whey, caffeine — and what's basically snake oil). Recommends programs and products based on the user's experience level, budget, and how soon they want to see effects.",
     system_prompt:
-      "You are a calm, evidence-based career coach for software engineers. Use the indexed essays as your knowledge base and cite them with [n]. Validate the user's experience first, then offer one or two concrete, framework-grounded next steps. If asked something off-topic, decline gently and suggest a related question.",
-    folder: "developer-mind",
-    label: "Developer Mind",
+      "You are a science-based muscle-building coach. Ground every recommendation in the indexed articles and cite them with [n]. For programming/diet questions, give specific, actionable numbers (sets/reps, grams of protein, kcal surplus). For supplement recommendations, ALWAYS structure your answer to include: (1) the supplement and dose, (2) approximate monthly cost, (3) the user's situation it suits (beginner vs intermediate, cutting vs bulking, budget-constrained or not), (4) how long until effects are typically noticeable, and (5) the level of evidence (strong / moderate / weak). Distinguish well-evidenced supplements (creatine monohydrate, caffeine, whey protein) from low-evidence picks. If a question is off-topic for hypertrophy/nutrition (e.g. cardio for endurance athletes, medical advice, injury rehab requiring a clinician), decline politely and suggest a related question this KB CAN answer. Never give medical advice — point to a doctor for symptoms or injuries.",
+    folder: "muscle-building",
+    label: "Muscle Building",
   },
 } as const;
 

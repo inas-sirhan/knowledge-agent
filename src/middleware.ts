@@ -7,8 +7,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Run on everything except static asset files. We also skip API routes
-    // that authenticate via headers (the widget public endpoint).
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // Run on pages only — skip Next internals, static assets, and ALL /api routes
+    // (each API route does its own auth check; running middleware on them just
+    // adds extra Supabase round-trips per fetch).
+    "/((?!_next/static|_next/image|favicon.ico|api/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

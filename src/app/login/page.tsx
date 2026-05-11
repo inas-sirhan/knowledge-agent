@@ -37,11 +37,11 @@ export default function LoginPage() {
 
   function fillDemo(which: "A" | "B") {
     if (which === "A") {
-      setEmail(process.env.NEXT_PUBLIC_DEMO_A_EMAIL || "alice@demo.local");
-      setPassword(process.env.NEXT_PUBLIC_DEMO_A_PASSWORD || "demo-password-A!");
+      setEmail("alice@demo.local");
+      setPassword("demo-password-A!");
     } else {
-      setEmail(process.env.NEXT_PUBLIC_DEMO_B_EMAIL || "bob@demo.local");
-      setPassword(process.env.NEXT_PUBLIC_DEMO_B_PASSWORD || "demo-password-B!");
+      setEmail("bob@demo.local");
+      setPassword("demo-password-B!");
     }
   }
 

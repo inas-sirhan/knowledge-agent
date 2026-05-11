@@ -2,8 +2,8 @@
 
 Each subfolder is one demo user's KB. Drop `.md` or `.txt` files here and run `npm run seed` to ingest them.
 
-- `ai-and-the-programmer/` → User A (alice@demo.local). Theme: how AI tools change the craft of programming.
-- `developer-mind/` → User B (bob@demo.local). Theme: imposter syndrome, burnout, and identity for engineers.
+- `ai-and-the-programmer/` → User A (alice@demo.local). Theme: AI tools, LLM-assisted development, model evals. Sourced from Simon Willison's blog atom feed.
+- `muscle-building/` → User B (bob@demo.local). Theme: hypertrophy, lean-bulk diet, evidence-based supplements. Sourced from Stronger By Science + Renaissance Periodization atom feeds, plus a curated supplement catalog (`000-supplement-catalog.md`) with doses, monthly cost, expected time-to-effect, and evidence levels.
 
 ## File format
 
@@ -12,21 +12,16 @@ Each subfolder is one demo user's KB. Drop `.md` or `.txt` files here and run `n
 - One file = one document.
 - Aim for ≥20 docs or ≥50k tokens per KB (per the assignment spec).
 
-## Suggested sources to fetch (public)
+## Refreshing the fetched content
 
-For **AI & the Programmer** (User A):
-- Simon Willison's blog posts about LLMs, prompt engineering, agents
-- Andrej Karpathy talks/notes ("Software 2.0", "Software 3.0")
-- Steve Yegge's recent posts about AI-assisted development
-- Geoffrey Litt's essays on malleable software
-- Anthropic engineering posts about Claude Code
+The atom-feed content is committed as `.md` files so reviewers only need
+`npm run seed`. To refresh from the live feeds:
 
-For **Developer Mind** (User B):
-- Julia Evans posts on debugging mindset & learning in public
-- Dan Luu essays on senior engineering and career
-- Will Larson's writing on staff-eng career paths
-- Charity Majors on burnout and ops culture
-- Top r/cscareerquestions threads on imposter syndrome
+```bash
+npx tsx scripts/fetch-seed.ts
+npm run seed
+```
 
-You're welcome to swap themes entirely — just keep the two KBs visibly different so the demo
-showcases per-user isolation.
+`fetch-seed` preserves any file prefixed with `000-` (curated content),
+overwrites the rest. Add a new feed by editing the `FEEDS` array at the top
+of [scripts/fetch-seed.ts](../../scripts/fetch-seed.ts).

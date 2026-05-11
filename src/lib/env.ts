@@ -15,5 +15,4 @@ export const env = {
   OPENAI_CHAT_MODEL: () => process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
   OPENAI_EMBED_MODEL: () => process.env.OPENAI_EMBED_MODEL || "text-embedding-3-small",
   COHERE_API_KEY: () => process.env.COHERE_API_KEY || "",
-  APP_URL: () => process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
 };
