@@ -174,7 +174,7 @@ async function main() {
     await fs.mkdir(dir, { recursive: true });
     for (const f of await fs.readdir(dir)) {
       if (!f.endsWith(".md")) continue;
-      if (f.startsWith("000-")) continue; // curated catalog
+      if (f.startsWith("000")) continue; // any 000* file is curated/hand-written
       await fs.unlink(path.join(dir, f));
     }
   }
