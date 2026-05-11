@@ -40,3 +40,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDE
+.vscode/
+.idea/
+
+# Playwright artifacts
+/playwright-report
+/test-results
+/playwright/.cache
+/.playwright-mcp
+
