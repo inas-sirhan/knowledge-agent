@@ -1,0 +1,7 @@
+[
+  { "q": "What style of pizza should I try if my home oven maxes at 550°F?", "expects": ["[1]", "ny", "new york", "detroit", "sicilian"] },
+  { "q": "My pizza crust is gummy in the middle. What's wrong?", "expects": ["gummy", "moisture", "undercook", "steel", "preheat"] },
+  { "q": "What's the difference between Neapolitan and NY style?", "expects": ["neapolitan", "new york", "hydration", "temperature"] },
+  { "q": "Recommend a beginner-friendly pizza style.", "expects": ["[1]"] },
+  { "q": "Best supplement for building muscle?", "expects": ["don't know", "doesn't", "outside", "knowledge base", "off-topic", "pizza"] }
+]

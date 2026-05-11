@@ -1,7 +1,0 @@
-[
-  { "q": "What's the most useful way to think about LLMs as a programmer?", "expects": ["tool", "leverage", "amplify", "skill"] },
-  { "q": "Recommend three things to read first if I'm new here.", "expects": ["[1]", "[2]"] },
-  { "q": "What does Karpathy mean by Software 2.0?", "expects": ["software 2.0", "neural", "weights"] },
-  { "q": "How should I review code that an AI wrote?", "expects": ["review", "test", "verify"] },
-  { "q": "Tell me a recipe for chicken soup.", "expects": ["don't know", "doesn't", "outside", "knowledge base", "off-topic"] }
-]

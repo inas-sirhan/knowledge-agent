@@ -2,8 +2,8 @@
 
 Each subfolder is one demo user's KB. Drop `.md` or `.txt` files here and run `npm run seed` to ingest them.
 
-- `ai-and-the-programmer/` → User A (alice@demo.local). Theme: AI tools, LLM-assisted development, model evals. Sourced from Simon Willison's blog atom feed.
-- `muscle-building/` → User B (bob@demo.local). Theme: hypertrophy, lean-bulk diet, evidence-based supplements. Sourced from Stronger By Science + Renaissance Periodization atom feeds, plus a curated supplement catalog (`000-supplement-catalog.md`) with doses, monthly cost, expected time-to-effect, and evidence levels.
+- `pizza-making/` → User A (alice@demo.local). Theme: home pizza making across every major style. Fully hand-curated (no RSS) — Neapolitan / NY / Detroit / Sicilian / Roman / Chicago deep-dives, dough chemistry, sauce/cheese/toppings, oven and equipment buying guide, troubleshooting, canonical recipes.
+- `muscle-building/` → User B (bob@demo.local). Theme: hypertrophy, lean-bulk diet, evidence-based supplements. Sourced from Stronger By Science + Renaissance Periodization atom feeds, plus four hand-curated `000*` docs covering supplements, mechanisms, training methodologies, herbal supplements, and pre-workout / pump.
 
 ## File format
 

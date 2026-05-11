@@ -26,19 +26,10 @@ interface Feed {
 }
 
 const FEEDS: Feed[] = [
-  // KB A — AI & the Programmer. Long-form essays from Simon Willison.
-  {
-    folder: "ai-and-the-programmer",
-    label: "AI & the Programmer (entries)",
-    url: "https://simonwillison.net/atom/entries/",
-    max: 60,
-  },
-  {
-    folder: "ai-and-the-programmer",
-    label: "AI & the Programmer (notes)",
-    url: "https://simonwillison.net/atom/everything/",
-    max: 60,
-  },
+  // KB A (pizza-making) is fully hand-curated — no public RSS source
+  // captures the depth we want. All docs in data/seed/pizza-making/ are
+  // 000-prefixed and preserved across fetch runs.
+
   // KB B — Muscle building, hypertrophy, diet, supplements.
   // Stronger By Science (Greg Nuckols) — science-based lifting + supplement reviews.
   // Renaissance Periodization (Mike Israetel) — programming + diet for lean gains.

@@ -11,7 +11,7 @@ and per-account isolation.
 
 | User | Email | Password | Knowledge base |
 |------|-------|----------|----------------|
-| A | `alice@demo.local` | `demo-password-A!` | _AI & the Programmer_ — essays on AI tools, LLM-assisted development, model evals (Simon Willison archive) |
+| A | `alice@demo.local` | `demo-password-A!` | _Pizza Making_ — every major style (Neapolitan, NY, Detroit, Sicilian, Roman, Chicago…), dough chemistry, sauce/cheese/toppings, ovens & equipment buying, troubleshooting, canonical recipes. Hand-curated reference. |
 | B | `bob@demo.local` | `demo-password-B!` | _Muscle Building_ — hypertrophy, diet for lean gains, supplements (Stronger By Science + Renaissance Periodization + a curated supplement catalog with prices, doses, time-to-effect, evidence levels) |
 
 Switching accounts visibly changes persona, sources, and recommendations. Cross-user reads are
