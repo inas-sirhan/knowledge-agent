@@ -1,0 +1,520 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
+import { cn, formatDate, truncate } from "@/lib/utils";
+import {
+  Database,
+  Settings,
+  MessagesSquare,
+  BarChart3,
+  Plus,
+  Trash2,
+  FileText,
+  Globe,
+  ClipboardPaste,
+  Upload,
+} from "lucide-react";
+
+type Tab = "sources" | "config" | "conversations" | "analytics";
+
+interface Doc {
+  id: string;
+  title: string;
+  source_type: "paste" | "upload" | "url";
+  source_url: string | null;
+  token_count: number;
+  chunk_count: number;
+  created_at: string;
+}
+interface Conv {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+}
+interface AgentConfig {
+  persona: string;
+  system_prompt: string;
+  model: "gpt-4o-mini" | "gpt-4o" | "gpt-4.1-mini";
+  temperature: number;
+  top_k: number;
+  rerank_enabled: boolean;
+}
+
+export default function AdminClient({ userEmail }: { userEmail: string }) {
+  const [tab, setTab] = useState<Tab>("sources");
+
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-8 md:px-8">
+      <header className="mb-6 flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
+        <p className="text-sm text-muted-foreground">
+          Manage <span className="font-medium text-foreground">{userEmail}</span>&apos;s knowledge base, agent
+          configuration, and conversations.
+        </p>
+      </header>
+
+      <nav className="mb-6 flex flex-wrap gap-1 rounded-md border bg-card p-1 text-sm">
+        <TabButton active={tab === "sources"} onClick={() => setTab("sources")}>
+          <Database className="h-4 w-4" /> Sources
+        </TabButton>
+        <TabButton active={tab === "config"} onClick={() => setTab("config")}>
+          <Settings className="h-4 w-4" /> Configuration
+        </TabButton>
+        <TabButton active={tab === "conversations"} onClick={() => setTab("conversations")}>
+          <MessagesSquare className="h-4 w-4" /> Conversations
+        </TabButton>
+        <TabButton active={tab === "analytics"} onClick={() => setTab("analytics")}>
+          <BarChart3 className="h-4 w-4" /> Analytics
+        </TabButton>
+      </nav>
+
+      {tab === "sources" && <SourcesTab />}
+      {tab === "config" && <ConfigTab />}
+      {tab === "conversations" && <ConversationsTab />}
+      {tab === "analytics" && <AnalyticsTab />}
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-2 rounded-md px-3 py-1.5",
+        active
+          ? "bg-primary text-primary-foreground shadow-sm"
+          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* ---------- Sources ---------- */
+function SourcesTab() {
+  const [docs, setDocs] = useState<Doc[] | null>(null);
+  const [openDocId, setOpenDocId] = useState<string | null>(null);
+  const [adding, setAdding] = useState<"paste" | "url" | "upload" | null>(null);
+
+  async function load() {
+    const res = await fetch("/api/documents");
+    const j = await res.json();
+    setDocs(j.documents ?? []);
+  }
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function del(id: string) {
+    if (!confirm("Delete this document and all its chunks?")) return;
+    await fetch(`/api/documents/${id}`, { method: "DELETE" });
+    load();
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-4">
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle>Knowledge sources</CardTitle>
+            <CardDescription>
+              Anything you add here is chunked, embedded, and indexed for retrieval.
+            </CardDescription>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setAdding("paste")}>
+              <ClipboardPaste className="h-4 w-4" /> Paste
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setAdding("url")}>
+              <Globe className="h-4 w-4" /> URL
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setAdding("upload")}>
+              <Upload className="h-4 w-4" /> Upload
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {adding && <AddSourceForm kind={adding} onDone={() => { setAdding(null); load(); }} onCancel={() => setAdding(null)} />}
+          {docs == null ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading…</div>
+          ) : docs.length === 0 ? (
+            <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+              No documents yet. Add one above to start.
+            </div>
+          ) : (
+            <ul className="divide-y">
+              {docs.map((d) => (
+                <li key={d.id} className="py-3">
+                  <div className="flex items-start gap-3">
+                    <SourceIcon type={d.source_type} />
+                    <div className="min-w-0 flex-1">
+                      <button
+                        onClick={() => setOpenDocId(openDocId === d.id ? null : d.id)}
+                        className="block w-full truncate text-left text-sm font-medium hover:underline"
+                      >
+                        {d.title}
+                      </button>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {d.source_type}
+                        {d.source_url && (
+                          <> · <a href={d.source_url} target="_blank" rel="noreferrer" className="underline">source</a></>
+                        )}
+                        · {d.chunk_count} chunks · ~{d.token_count.toLocaleString()} tokens · {formatDate(d.created_at)}
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => del(d.id)} title="Delete">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                  {openDocId === d.id && <DocumentChunks documentId={d.id} />}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function SourceIcon({ type }: { type: Doc["source_type"] }) {
+  const cls = "mt-0.5 h-4 w-4 text-muted-foreground";
+  if (type === "url") return <Globe className={cls} />;
+  if (type === "upload") return <Upload className={cls} />;
+  return <FileText className={cls} />;
+}
+
+function DocumentChunks({ documentId }: { documentId: string }) {
+  const [chunks, setChunks] = useState<{ id: string; chunk_index: number; content: string; token_count: number }[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/documents/${documentId}`).then(async (r) => {
+      const j = await r.json();
+      if (!cancelled) setChunks(j.chunks ?? []);
+    });
+    return () => { cancelled = true; };
+  }, [documentId]);
+
+  if (chunks == null) return <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><Spinner /> Loading chunks…</div>;
+  return (
+    <div className="mt-3 max-h-96 space-y-2 overflow-y-auto rounded-md border bg-muted/40 p-3">
+      {chunks.map((c) => (
+        <div key={c.id} className="rounded border bg-background p-2 text-xs">
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+            chunk {c.chunk_index + 1} · ~{c.token_count} tokens
+          </div>
+          <div className="whitespace-pre-wrap leading-relaxed">{truncate(c.content, 800)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AddSourceForm({ kind, onDone, onCancel }: { kind: "paste" | "url" | "upload"; onDone: () => void; onCancel: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
+  const [url, setUrl] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError(null);
+    try {
+      let body: unknown;
+      if (kind === "paste") body = { type: "paste", title, text };
+      else if (kind === "url") body = { type: "url", url, title };
+      else body = { type: "upload", filename: title, text };
+      const res = await fetch("/api/ingest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `failed (${res.status})`);
+      onDone();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  }
+
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setTitle(file.name);
+    file.text().then(setText);
+  }
+
+  return (
+    <form onSubmit={submit} className="mb-4 rounded-md border bg-muted/30 p-4">
+      <div className="grid gap-3">
+        {kind === "url" && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="url">URL</Label>
+            <Input id="url" type="url" value={url} onChange={(e) => setUrl(e.target.value)} required placeholder="https://example.com/post" />
+          </div>
+        )}
+        {kind === "upload" && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="file">File (.txt, .md)</Label>
+            <input id="file" type="file" accept=".txt,.md,.markdown,text/*" onChange={onFile} className="text-sm" required />
+          </div>
+        )}
+        {kind !== "url" && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="title">Title</Label>
+            <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="e.g. Onboarding guide" />
+          </div>
+        )}
+        {kind === "url" && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="title">Title (optional, falls back to page &lt;title&gt;)</Label>
+            <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Optional" />
+          </div>
+        )}
+        {kind !== "url" && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="text">Content</Label>
+            <Textarea id="text" value={text} onChange={(e) => setText(e.target.value)} required rows={8} placeholder={kind === "upload" ? "Loaded from your file" : "Paste your content here"} />
+          </div>
+        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <div className="flex gap-2">
+          <Button type="submit" disabled={busy}>{busy ? <Spinner /> : <><Plus className="h-4 w-4" /> Add</>}</Button>
+          <Button type="button" variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+/* ---------- Configuration ---------- */
+function ConfigTab() {
+  const [cfg, setCfg] = useState<AgentConfig | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/config").then(async (r) => {
+      const j = await r.json();
+      setCfg(
+        j.config || {
+          persona: "Helpful, concise expert assistant.",
+          system_prompt:
+            "You answer questions strictly using the provided knowledge base context. Cite sources by their numeric reference like [1], [2].",
+          model: "gpt-4o-mini",
+          temperature: 0.3,
+          top_k: 8,
+          rerank_enabled: true,
+        }
+      );
+    });
+  }, []);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!cfg) return;
+    setBusy(true); setSaved(false);
+    const res = await fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
+    if (res.ok) setSaved(true);
+    setBusy(false);
+  }
+
+  if (!cfg) return <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading…</div>;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Agent configuration</CardTitle>
+        <CardDescription>Per-account settings. Changes take effect on the next message.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={save} className="grid gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="persona">Persona</Label>
+            <Input id="persona" value={cfg.persona} onChange={(e) => setCfg({ ...cfg, persona: e.target.value })} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="prompt">System prompt</Label>
+            <Textarea id="prompt" rows={6} value={cfg.system_prompt} onChange={(e) => setCfg({ ...cfg, system_prompt: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="model">Model</Label>
+              <select
+                id="model"
+                value={cfg.model}
+                onChange={(e) => setCfg({ ...cfg, model: e.target.value as AgentConfig["model"] })}
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              >
+                <option value="gpt-4o-mini">gpt-4o-mini (fast, cheap)</option>
+                <option value="gpt-4o">gpt-4o</option>
+                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="temp">Temperature ({cfg.temperature.toFixed(2)})</Label>
+              <input
+                id="temp" type="range" min={0} max={1.5} step={0.05}
+                value={cfg.temperature}
+                onChange={(e) => setCfg({ ...cfg, temperature: parseFloat(e.target.value) })}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="topk">Retrieval k ({cfg.top_k})</Label>
+              <input
+                id="topk" type="range" min={1} max={20} step={1}
+                value={cfg.top_k}
+                onChange={(e) => setCfg({ ...cfg, top_k: parseInt(e.target.value, 10) })}
+              />
+            </div>
+          </div>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox" checked={cfg.rerank_enabled}
+              onChange={(e) => setCfg({ ...cfg, rerank_enabled: e.target.checked })}
+            />
+            Enable Cohere rerank (falls back gracefully when no API key is set)
+          </label>
+          <div className="flex items-center gap-3">
+            <Button type="submit" disabled={busy}>{busy ? <Spinner /> : "Save changes"}</Button>
+            {saved && <span className="text-sm text-muted-foreground">Saved.</span>}
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ---------- Conversations ---------- */
+function ConversationsTab() {
+  const [convs, setConvs] = useState<Conv[] | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/conversations").then(async (r) => {
+      const j = await r.json();
+      setConvs(j.conversations ?? []);
+    });
+  }, []);
+
+  async function del(id: string) {
+    if (!confirm("Delete this conversation?")) return;
+    await fetch(`/api/conversations/${id}`, { method: "DELETE" });
+    setConvs((c) => (c ? c.filter((x) => x.id !== id) : c));
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Recent conversations</CardTitle>
+        <CardDescription>Last 50 conversations across all sessions.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {convs == null ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading…</div>
+        ) : convs.length === 0 ? (
+          <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">No conversations yet.</div>
+        ) : (
+          <ul className="divide-y">
+            {convs.map((c) => (
+              <li key={c.id} className="py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <button onClick={() => setOpenId(openId === c.id ? null : c.id)} className="min-w-0 flex-1 text-left text-sm font-medium hover:underline">
+                    {truncate(c.title, 90)}
+                  </button>
+                  <span className="text-xs text-muted-foreground">{c.message_count} msgs · {formatDate(c.updated_at)}</span>
+                  <Button variant="ghost" size="icon" onClick={() => del(c.id)} title="Delete">
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+                {openId === c.id && <ConversationView id={c.id} />}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ConversationView({ id }: { id: string }) {
+  const [msgs, setMsgs] = useState<{ id: string; role: string; content: string; created_at: string }[] | null>(null);
+  useEffect(() => {
+    fetch(`/api/conversations/${id}`).then(async (r) => {
+      const j = await r.json();
+      setMsgs(j.messages ?? []);
+    });
+  }, [id]);
+  if (!msgs) return <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><Spinner /> Loading…</div>;
+  return (
+    <div className="mt-3 max-h-96 space-y-2 overflow-y-auto rounded-md border bg-muted/40 p-3">
+      {msgs.map((m) => (
+        <div key={m.id} className="rounded border bg-background p-2 text-xs">
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{m.role} · {formatDate(m.created_at)}</div>
+          <div className="whitespace-pre-wrap leading-relaxed">{truncate(m.content, 1200)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------- Analytics ---------- */
+function AnalyticsTab() {
+  const [data, setData] = useState<{ documents: number; chunks: number; tokens: number; conversations: number; messages: number; totalTokens: number } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const [docsRes, convRes] = await Promise.all([fetch("/api/documents"), fetch("/api/conversations")]);
+      const docs = await docsRes.json();
+      const conv = await convRes.json();
+      const documents = (docs.documents ?? []).length;
+      const chunks = (docs.documents ?? []).reduce((acc: number, d: Doc) => acc + d.chunk_count, 0);
+      const tokens = (docs.documents ?? []).reduce((acc: number, d: Doc) => acc + d.token_count, 0);
+      setData({
+        documents,
+        chunks,
+        tokens,
+        conversations: (conv.conversations ?? []).length,
+        messages: conv.totalMessages ?? 0,
+        totalTokens: conv.totalTokens ?? 0,
+      });
+    })();
+  }, []);
+
+  if (!data) return <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading…</div>;
+
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+      <Stat label="Documents" value={data.documents.toLocaleString()} />
+      <Stat label="Chunks" value={data.chunks.toLocaleString()} />
+      <Stat label="KB tokens (approx)" value={data.tokens.toLocaleString()} />
+      <Stat label="Conversations" value={data.conversations.toLocaleString()} />
+      <Stat label="Messages" value={data.messages.toLocaleString()} />
+      <Stat label="LLM tokens used" value={data.totalTokens.toLocaleString()} />
+    </div>
+  );
+}
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 text-2xl font-semibold">{value}</div>
+    </div>
+  );
+}
