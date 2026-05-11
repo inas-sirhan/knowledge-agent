@@ -12,6 +12,7 @@
     "eval": "tsx scripts/eval.ts",
     "test:isolation": "tsx scripts/test-isolation.ts",
     "test:e2e": "playwright test",
+    "test:e2e:build": "cross-env E2E_USE_BUILD=1 playwright test",
     "test:e2e:ui": "playwright test --ui",
     "db:push": "echo \"Run the SQL in supabase/migrations/0001_init.sql in the Supabase SQL editor (or via the Supabase CLI: supabase db push).\""
   },
@@ -41,6 +42,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^10.1.0",
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "^15.5.18",
