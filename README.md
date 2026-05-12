@@ -22,22 +22,64 @@ blocked at the database layer by Postgres RLS — see `npm run test:isolation`.
 
 ---
 
-## What's in here
+## What's in here, mapped to the brief
+
+Each row is annotated with where it came from: ✅ = required by the spec,
+🟦 = explicitly-called-out **optional**, 🏆 = explicitly-called-out **bonus**,
+✨ = extras I added beyond spec.
+
+### Required (PDF sections 2–6)
 
 | Capability | Where |
 |---|---|
-| Streaming chat with citations | [src/components/chat/chat.tsx](src/components/chat/chat.tsx), [src/app/api/chat/route.ts](src/app/api/chat/route.ts) |
-| Hybrid retrieval (pgvector + FTS, RRF-fused) | [supabase/migrations/0001_init.sql](supabase/migrations/0001_init.sql) → `match_chunks_hybrid` |
-| Cohere rerank (optional, falls back gracefully) | [src/lib/cohere.ts](src/lib/cohere.ts) |
-| Query rewriting for follow-ups | `refineQuery` in [src/app/api/chat/route.ts](src/app/api/chat/route.ts) |
-| `search_kb` tool the model can call mid-stream | [src/app/api/chat/route.ts](src/app/api/chat/route.ts) |
-| Admin: sources, chunks, config, conversations, analytics | [src/components/admin/admin-client.tsx](src/components/admin/admin-client.tsx) |
-| Ingestion (paste / upload / URL — **including PDF**) | [src/lib/ingest.ts](src/lib/ingest.ts), [src/app/api/ingest/route.ts](src/app/api/ingest/route.ts) |
-| Embeddable widget | [src/app/widget/page.tsx](src/app/widget/page.tsx) — iframe `/widget` from any host page |
-| Per-user isolation (RLS) | All policies in [supabase/migrations/0001_init.sql](supabase/migrations/0001_init.sql) |
-| Isolation proof | [scripts/test-isolation.ts](scripts/test-isolation.ts) — `npm run test:isolation` |
-| Eval harness (golden questions) | [scripts/eval.ts](scripts/eval.ts) — `npm run eval` |
-| Seed script | [scripts/seed.ts](scripts/seed.ts) — `npm run seed` |
+| ✅ RAG agent ingests a KB and indexes it | [src/lib/ingest.ts](src/lib/ingest.ts), [supabase/migrations/0001_init.sql](supabase/migrations/0001_init.sql) |
+| ✅ Answers grounded in KB with **citations** (titles + clickable links) | [src/app/api/chat/route.ts](src/app/api/chat/route.ts), citation chips in [src/components/chat/chat.tsx](src/components/chat/chat.tsx) |
+| ✅ Recommendations (persona-driven; documented choice below) | [scripts/_lib.ts](scripts/_lib.ts) personas + `search_kb` tool in [chat route](src/app/api/chat/route.ts) |
+| ✅ Out-of-scope refusal (no hallucinations) | System-prompt guardrails in [src/lib/persona.ts](src/lib/persona.ts) |
+| ✅ Embeddable chat widget | [src/app/widget/page.tsx](src/app/widget/page.tsx) — iframe `/widget` |
+| ✅ Streaming responses (Vercel AI SDK) | `streamText` + `createUIMessageStream` in [chat route](src/app/api/chat/route.ts) |
+| ✅ Admin: paste / URL / upload + (re)index + view chunks + configure prompt & persona | [src/components/admin/admin-client.tsx](src/components/admin/admin-client.tsx) |
+| ✅ Auth (Supabase email/password) + 2 isolated demo users | [src/lib/supabase/](src/lib/supabase/) + [scripts/seed.ts](scripts/seed.ts) |
+| ✅ Strict per-user isolation, **proven** by an automated test | RLS in [0001_init.sql](supabase/migrations/0001_init.sql) + [scripts/test-isolation.ts](scripts/test-isolation.ts) (6/6) |
+| ✅ Plug-and-play: clone → env → install → seed → dev | See "Run it locally" below |
+| ✅ Multi-turn chat with follow-up handling | full message history + `refineQuery` rewrite |
+| ✅ Next.js 15 App Router + TS + Tailwind + shadcn-style UI + Supabase + pgvector + OpenAI | stack throughout |
+
+### Optional (PDF marks as "optional")
+
+| Capability | Where |
+|---|---|
+| 🟦 Streaming chat (PDF: "strongly preferred — optional") | ✅ shipped |
+| 🟦 Admin: model selection, temperature, retrieval-k | Configuration tab in admin |
+| 🟦 Admin: recent conversations + basic usage analytics | Conversations + Analytics tabs |
+
+### Bonus (PDF "Bonus points (not required) for…")
+
+| Capability | Where |
+|---|---|
+| 🏆 Evaluation harness with golden questions | [scripts/eval.ts](scripts/eval.ts) — `npm run eval` (10/10) |
+| 🏆 Hybrid search (semantic + keyword) | `match_chunks_hybrid` SQL function in [0001_init.sql](supabase/migrations/0001_init.sql), fused with RRF |
+| 🏆 Reranking | Cohere rerank in [src/lib/cohere.ts](src/lib/cohere.ts) — toggleable per-user, falls back gracefully if no key |
+| 🏆 Conversation history persistence | `conversations` + `messages` tables; full thread visible in admin |
+
+### Extras I added beyond the spec ✨
+
+| Capability | Where |
+|---|---|
+| ✨ Query rewriting for follow-ups ("and what about the second one?" → standalone query) | `refineQuery` in [chat route](src/app/api/chat/route.ts) |
+| ✨ `search_kb` tool the model can call mid-stream — and its results join the citation chips live | [chat route](src/app/api/chat/route.ts) |
+| ✨ **PDF ingestion** via `pdf-parse` v2 (PDF spec said "files… your choice" — we picked txt/md + PDF) | [src/lib/ingest.ts](src/lib/ingest.ts) `pdfBufferToText`, multipart path in [ingest route](src/app/api/ingest/route.ts) |
+| ✨ Content-hash dedupe with "replace existing?" confirm modal | [src/lib/ingest.ts](src/lib/ingest.ts) `DuplicateContentError` + UI in [admin-client.tsx](src/components/admin/admin-client.tsx) |
+| ✨ Citation chips as a custom `data-citations` UI message part (typed end-to-end) | [chat route](src/app/api/chat/route.ts), [chat.tsx](src/components/chat/chat.tsx) |
+| ✨ Toast notifications + custom confirm modal (no native `alert`/`confirm`) | [src/components/ui/toast.tsx](src/components/ui/toast.tsx), [confirm-dialog.tsx](src/components/ui/confirm-dialog.tsx) |
+| ✨ Markdown rendering inside admin conversation modal (citations preserved) | [admin-client.tsx](src/components/admin/admin-client.tsx) `ConversationModal` |
+| ✨ ARIA-correct dialogs (`role="dialog"`, `aria-modal`, `aria-labelledby`) | confirm + conversation modals |
+| ✨ Top-bar nav progress indicator on route transitions | [src/components/nav-progress.tsx](src/components/nav-progress.tsx) |
+| ✨ Dark mode via `prefers-color-scheme` | [src/app/globals.css](src/app/globals.css) |
+| ✨ Hand-curated reference docs alongside RSS-fetched seed | `data/seed/muscle-building/000-supplement-catalog.md`, `data/seed/pizza-making/000a-style-neapolitan.md`, etc. |
+| ✨ Playwright e2e suite (smoke + crawl) | [e2e/](e2e/) — `npm run test:e2e` |
+| ✨ Targeted PDF + dedupe test scripts | `npm run test:pdf`, `npm run test:dedupe` |
+| ✨ Loading skeletons for App Router route transitions | `loading.tsx` in each `(app)` segment |
 
 ---
 
