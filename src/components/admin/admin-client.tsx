@@ -255,17 +255,26 @@ function AddSourceForm({ kind, onDone, onCancel }: { kind: "paste" | "url" | "up
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const toast = useToast();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setError(null);
     try {
-      let body: unknown;
-      if (kind === "paste") body = { type: "paste", title, text };
-      else if (kind === "url") body = { type: "url", url, title };
-      else body = { type: "upload", filename: title, text };
-      const res = await fetch("/api/ingest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      let res: Response;
+      if (kind === "upload" && file) {
+        const fd = new FormData();
+        fd.set("file", file);
+        if (title) fd.set("title", title);
+        res = await fetch("/api/ingest", { method: "POST", body: fd });
+      } else {
+        let body: unknown;
+        if (kind === "paste") body = { type: "paste", title, text };
+        else if (kind === "url") body = { type: "url", url, title };
+        else body = { type: "upload", filename: title, text };
+        res = await fetch("/api/ingest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      }
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || `failed (${res.status})`);
       toast.success(
@@ -281,11 +290,20 @@ function AddSourceForm({ kind, onDone, onCancel }: { kind: "paste" | "url" | "up
   }
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setTitle(file.name);
-    file.text().then(setText);
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFile(f);
+    setTitle(f.name.replace(/\.(pdf|md|markdown|txt)$/i, ""));
+    // For text-ish files, pre-fill the text body so the user sees what's there.
+    // For PDFs, defer parsing to the server.
+    if (!f.type.includes("pdf") && !f.name.toLowerCase().endsWith(".pdf")) {
+      f.text().then((t) => setText(t.slice(0, 50_000)));
+    } else {
+      setText("");
+    }
   }
+
+  const isPdf = file && (file.type.includes("pdf") || file.name.toLowerCase().endsWith(".pdf"));
 
   return (
     <form onSubmit={submit} className="mb-4 rounded-md border bg-muted/30 p-4">
@@ -298,8 +316,21 @@ function AddSourceForm({ kind, onDone, onCancel }: { kind: "paste" | "url" | "up
         )}
         {kind === "upload" && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="file">File (.txt, .md)</Label>
-            <input id="file" type="file" accept=".txt,.md,.markdown,text/*" onChange={onFile} className="text-sm" required />
+            <Label htmlFor="file">File (.txt, .md, .pdf)</Label>
+            <input
+              id="file"
+              type="file"
+              accept=".txt,.md,.markdown,.pdf,text/*,application/pdf"
+              onChange={onFile}
+              className="text-sm"
+              required
+            />
+            {file && (
+              <p className="text-xs text-muted-foreground">
+                {file.name} · {(file.size / 1024).toFixed(1)} KB
+                {isPdf && " · PDF (parsed on the server)"}
+              </p>
+            )}
           </div>
         )}
         {kind !== "url" && (
@@ -314,10 +345,29 @@ function AddSourceForm({ kind, onDone, onCancel }: { kind: "paste" | "url" | "up
             <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Optional" />
           </div>
         )}
-        {kind !== "url" && (
+        {kind === "paste" && (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="text">Content</Label>
-            <Textarea id="text" value={text} onChange={(e) => setText(e.target.value)} required rows={8} placeholder={kind === "upload" ? "Loaded from your file" : "Paste your content here"} />
+            <Textarea
+              id="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              required
+              rows={8}
+              placeholder="Paste your content here"
+            />
+          </div>
+        )}
+        {kind === "upload" && !isPdf && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="text">Content (loaded from file — edit if you like)</Label>
+            <Textarea
+              id="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              required
+              rows={8}
+            />
           </div>
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}

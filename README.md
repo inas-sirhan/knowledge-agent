@@ -31,7 +31,7 @@ blocked at the database layer by Postgres RLS — see `npm run test:isolation`.
 | Query rewriting for follow-ups | `refineQuery` in [src/app/api/chat/route.ts](src/app/api/chat/route.ts) |
 | `search_kb` tool the model can call mid-stream | [src/app/api/chat/route.ts](src/app/api/chat/route.ts) |
 | Admin: sources, chunks, config, conversations, analytics | [src/components/admin/admin-client.tsx](src/components/admin/admin-client.tsx) |
-| Ingestion (paste / upload / URL) | [src/lib/ingest.ts](src/lib/ingest.ts), [src/app/api/ingest/route.ts](src/app/api/ingest/route.ts) |
+| Ingestion (paste / upload / URL — **including PDF**) | [src/lib/ingest.ts](src/lib/ingest.ts), [src/app/api/ingest/route.ts](src/app/api/ingest/route.ts) |
 | Embeddable widget | [src/app/widget/page.tsx](src/app/widget/page.tsx) — iframe `/widget` from any host page |
 | Per-user isolation (RLS) | All policies in [supabase/migrations/0001_init.sql](supabase/migrations/0001_init.sql) |
 | Isolation proof | [scripts/test-isolation.ts](scripts/test-isolation.ts) — `npm run test:isolation` |
@@ -194,6 +194,7 @@ user. To swap in different content for either KB, drop new `.md` files into the 
 | `npm run seed` | Create demo users + ingest their KBs |
 | `npm run eval` | Run golden-question eval harness against both KBs |
 | `npm run test:isolation` | Verify RLS isolation between users (six checks) |
+| `npm run test:pdf <file.pdf>` | End-to-end PDF parse → chunk → embed → retrieve test |
 | `npm run db:push` | Reminder/instruction for applying the SQL migration |
 
 ---
@@ -208,8 +209,8 @@ user. To swap in different content for either KB, drop new `.md` files into the 
   a sidebar of recent conversations would close the loop with the admin "Conversations" tab.
 - **Reranker A/B tracking** — log retrieval rank and final-answer relevance so we can quantify
   what Cohere rerank actually buys us per-KB.
-- **PDF + DOCX ingestion** — current upload supports plain text and Markdown; a server-side
-  parser would unlock the most common "drop in your handbook" use case.
+- **DOCX ingestion** — PDF is supported via `pdf-parse` v2; adding `mammoth` for `.docx`
+  files would close the last common "drop in your handbook" gap.
 - **Tighter chunking** — switch from char-based approximation to a proper tokenizer
   (`tiktoken`) and try semantic chunking (group by topic boundaries instead of fixed window).
 

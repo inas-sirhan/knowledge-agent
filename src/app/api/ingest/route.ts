@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { ingestText, fetchUrlAsText } from "@/lib/ingest";
+import { ingestText, fetchUrlAsText, pdfBufferToText } from "@/lib/ingest";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -22,7 +22,9 @@ const FilePayloadSchema = z.object({
   text: z.string().min(1),
 });
 
-const BodySchema = z.discriminatedUnion("type", [PasteSchema, UrlSchema, FilePayloadSchema]);
+const JsonBodySchema = z.discriminatedUnion("type", [PasteSchema, UrlSchema, FilePayloadSchema]);
+
+const MAX_PDF_BYTES = 15 * 1024 * 1024; // 15 MB
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -31,9 +33,69 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
+  const contentType = req.headers.get("content-type") || "";
+
+  // --- multipart/form-data: PDF or arbitrary file upload ---
+  if (contentType.startsWith("multipart/form-data")) {
+    try {
+      const form = await req.formData();
+      const file = form.get("file");
+      const overrideTitle = (form.get("title") as string | null) || "";
+      if (!(file instanceof File)) {
+        return NextResponse.json({ error: "no file" }, { status: 400 });
+      }
+      if (file.size > MAX_PDF_BYTES) {
+        return NextResponse.json({ error: "file too large (max 15 MB)" }, { status: 413 });
+      }
+
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const isPdf =
+        file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
+      let title = overrideTitle || file.name;
+      let text: string;
+      const metadata: Record<string, unknown> = { original_filename: file.name, mime: file.type };
+
+      if (isPdf) {
+        const parsed = await pdfBufferToText(buffer);
+        if (!parsed.text || parsed.text.length < 50) {
+          return NextResponse.json(
+            { error: "PDF parsed to too little text — is it a scanned image without OCR?" },
+            { status: 422 }
+          );
+        }
+        text = parsed.text;
+        if (parsed.title && !overrideTitle) title = parsed.title;
+        metadata.pages = parsed.pages;
+      } else {
+        // Treat anything non-PDF as UTF-8 text (.md, .txt, .markdown).
+        text = buffer.toString("utf8").trim();
+        if (!text) {
+          return NextResponse.json({ error: "file is empty" }, { status: 422 });
+        }
+      }
+
+      const result = await ingestText(supabase, {
+        userId: user.id,
+        title: title.replace(/\.(pdf|txt|md|markdown)$/i, "").trim() || file.name,
+        rawText: text,
+        sourceType: "upload",
+        metadata,
+      });
+      return NextResponse.json({ ok: true, ...result });
+    } catch (err) {
+      console.error("ingest (multipart) error", err);
+      return NextResponse.json(
+        { error: (err as Error).message ?? "ingest failed" },
+        { status: 500 }
+      );
+    }
+  }
+
+  // --- application/json: paste / url / preflattened upload (legacy) ---
   let parsed;
   try {
-    parsed = BodySchema.parse(await req.json());
+    parsed = JsonBodySchema.parse(await req.json());
   } catch (err) {
     return NextResponse.json({ error: "invalid body", detail: String(err) }, { status: 400 });
   }
