@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn, formatDate, truncate } from "@/lib/utils";
 import {
   Database,
@@ -19,6 +23,7 @@ import {
   Globe,
   ClipboardPaste,
   Upload,
+  X,
 } from "lucide-react";
 
 type Tab = "sources" | "config" | "conversations" | "analytics";
@@ -113,6 +118,8 @@ function SourcesTab() {
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [openDocId, setOpenDocId] = useState<string | null>(null);
   const [adding, setAdding] = useState<"paste" | "url" | "upload" | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   async function load() {
     const res = await fetch("/api/documents");
@@ -123,10 +130,22 @@ function SourcesTab() {
     load();
   }, []);
 
-  async function del(id: string) {
-    if (!confirm("Delete this document and all its chunks?")) return;
-    await fetch(`/api/documents/${id}`, { method: "DELETE" });
-    load();
+  async function del(id: string, title: string) {
+    const ok = await confirm({
+      title: "Delete this document?",
+      description: `“${truncate(title, 60)}” and all of its indexed chunks will be permanently removed.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("Document deleted");
+      load();
+    } else {
+      const j = await res.json().catch(() => ({}));
+      toast.error("Couldn't delete document", j.error || `${res.status}`);
+    }
   }
 
   return (
@@ -180,7 +199,7 @@ function SourcesTab() {
                         · {d.chunk_count} chunks · ~{d.token_count.toLocaleString()} tokens · {formatDate(d.created_at)}
                       </div>
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => del(d.id)} title="Delete">
+                    <Button variant="ghost" size="icon" onClick={() => del(d.id, d.title)} title="Delete">
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
@@ -215,13 +234,15 @@ function DocumentChunks({ documentId }: { documentId: string }) {
 
   if (chunks == null) return <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><Spinner /> Loading chunks…</div>;
   return (
-    <div className="mt-3 max-h-96 space-y-2 overflow-y-auto rounded-md border bg-muted/40 p-3">
+    <div className="mt-3 max-h-[28rem] space-y-3 overflow-y-auto rounded-md border bg-muted/40 p-3">
       {chunks.map((c) => (
-        <div key={c.id} className="rounded border bg-background p-2 text-xs">
-          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+        <div key={c.id} className="rounded border bg-background p-3 text-sm">
+          <div className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">
             chunk {c.chunk_index + 1} · ~{c.token_count} tokens
           </div>
-          <div className="whitespace-pre-wrap leading-relaxed">{truncate(c.content, 800)}</div>
+          <div className="prose-chat text-sm leading-relaxed">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{truncate(c.content, 1200)}</ReactMarkdown>
+          </div>
         </div>
       ))}
     </div>
@@ -234,6 +255,7 @@ function AddSourceForm({ kind, onDone, onCancel }: { kind: "paste" | "url" | "up
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
+  const toast = useToast();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -246,9 +268,14 @@ function AddSourceForm({ kind, onDone, onCancel }: { kind: "paste" | "url" | "up
       const res = await fetch("/api/ingest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || `failed (${res.status})`);
+      toast.success(
+        "Document ingested",
+        `${j.chunkCount ?? "?"} chunks · ~${(j.tokenCount ?? 0).toLocaleString()} tokens`
+      );
       onDone();
     } catch (err) {
       setError((err as Error).message);
+      toast.error("Ingest failed", (err as Error).message);
       setBusy(false);
     }
   }
@@ -307,7 +334,7 @@ function AddSourceForm({ kind, onDone, onCancel }: { kind: "paste" | "url" | "up
 function ConfigTab() {
   const [cfg, setCfg] = useState<AgentConfig | null>(null);
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     fetch("/api/config").then(async (r) => {
@@ -329,10 +356,18 @@ function ConfigTab() {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!cfg) return;
-    setBusy(true); setSaved(false);
-    const res = await fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
-    if (res.ok) setSaved(true);
-    setBusy(false);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
+      if (res.ok) {
+        toast.success("Configuration saved", "Takes effect on the next message.");
+      } else {
+        const j = await res.json().catch(() => ({}));
+        toast.error("Couldn't save configuration", j.error || `${res.status}`);
+      }
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!cfg) return <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading…</div>;
@@ -393,7 +428,6 @@ function ConfigTab() {
           </label>
           <div className="flex items-center gap-3">
             <Button type="submit" disabled={busy}>{busy ? <Spinner /> : "Save changes"}</Button>
-            {saved && <span className="text-sm text-muted-foreground">Saved.</span>}
           </div>
         </form>
       </CardContent>
@@ -404,7 +438,9 @@ function ConfigTab() {
 /* ---------- Conversations ---------- */
 function ConversationsTab() {
   const [convs, setConvs] = useState<Conv[] | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openConv, setOpenConv] = useState<Conv | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   useEffect(() => {
     fetch("/api/conversations").then(async (r) => {
@@ -413,63 +449,135 @@ function ConversationsTab() {
     });
   }, []);
 
-  async function del(id: string) {
-    if (!confirm("Delete this conversation?")) return;
-    await fetch(`/api/conversations/${id}`, { method: "DELETE" });
-    setConvs((c) => (c ? c.filter((x) => x.id !== id) : c));
+  async function del(conv: Conv) {
+    const ok = await confirm({
+      title: "Delete this conversation?",
+      description: `“${truncate(conv.title, 60)}” and all of its messages will be permanently removed.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/conversations/${conv.id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("Conversation deleted");
+      setConvs((c) => (c ? c.filter((x) => x.id !== conv.id) : c));
+      if (openConv?.id === conv.id) setOpenConv(null);
+    } else {
+      const j = await res.json().catch(() => ({}));
+      toast.error("Couldn't delete conversation", j.error || `${res.status}`);
+    }
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Recent conversations</CardTitle>
-        <CardDescription>Last 50 conversations across all sessions.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {convs == null ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading…</div>
-        ) : convs.length === 0 ? (
-          <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">No conversations yet.</div>
-        ) : (
-          <ul className="divide-y">
-            {convs.map((c) => (
-              <li key={c.id} className="py-3">
-                <div className="flex items-start justify-between gap-3">
-                  <button onClick={() => setOpenId(openId === c.id ? null : c.id)} className="min-w-0 flex-1 text-left text-sm font-medium hover:underline">
-                    {truncate(c.title, 90)}
-                  </button>
-                  <span className="text-xs text-muted-foreground">{c.message_count} msgs · {formatDate(c.updated_at)}</span>
-                  <Button variant="ghost" size="icon" onClick={() => del(c.id)} title="Delete">
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-                {openId === c.id && <ConversationView id={c.id} />}
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent conversations</CardTitle>
+          <CardDescription>Last 50 conversations across all sessions. Click any row to view the full thread.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {convs == null ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading…</div>
+          ) : convs.length === 0 ? (
+            <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">No conversations yet.</div>
+          ) : (
+            <ul className="divide-y">
+              {convs.map((c) => (
+                <li key={c.id} className="py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <button onClick={() => setOpenConv(c)} className="min-w-0 flex-1 text-left text-sm font-medium hover:underline">
+                      {truncate(c.title, 90)}
+                    </button>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{c.message_count} msgs · {formatDate(c.updated_at)}</span>
+                    <Button variant="ghost" size="icon" onClick={() => del(c)} title="Delete">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+      {openConv && <ConversationModal conv={openConv} onClose={() => setOpenConv(null)} />}
+    </>
   );
 }
 
-function ConversationView({ id }: { id: string }) {
+function ConversationModal({ conv, onClose }: { conv: Conv; onClose: () => void }) {
   const [msgs, setMsgs] = useState<{ id: string; role: string; content: string; created_at: string }[] | null>(null);
+
   useEffect(() => {
-    fetch(`/api/conversations/${id}`).then(async (r) => {
+    fetch(`/api/conversations/${conv.id}`).then(async (r) => {
       const j = await r.json();
       setMsgs(j.messages ?? []);
     });
-  }, [id]);
-  if (!msgs) return <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><Spinner /> Loading…</div>;
+  }, [conv.id]);
+
+  // Close on Escape
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="mt-3 max-h-96 space-y-2 overflow-y-auto rounded-md border bg-muted/40 p-3">
-      {msgs.map((m) => (
-        <div key={m.id} className="rounded border bg-background p-2 text-xs">
-          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{m.role} · {formatDate(m.created_at)}</div>
-          <div className="whitespace-pre-wrap leading-relaxed">{truncate(m.content, 1200)}</div>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border bg-card shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-start justify-between gap-4 border-b px-5 py-4">
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate font-semibold tracking-tight">{conv.title}</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {conv.message_count} messages · created {formatDate(conv.created_at)} · last updated {formatDate(conv.updated_at)}
+            </p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} title="Close (Esc)">
+            <X className="h-4 w-4" />
+          </Button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {!msgs ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading…</div>
+          ) : msgs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No messages in this conversation.</p>
+          ) : (
+            <ol className="flex flex-col gap-5">
+              {msgs.map((m) => (
+                <li key={m.id} className={cn("flex flex-col gap-2", m.role === "user" ? "items-end" : "items-start")}>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {m.role} · {formatDate(m.created_at)}
+                  </div>
+                  <div
+                    className={cn(
+                      "max-w-[88%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+                      m.role === "user"
+                        ? "bg-primary text-primary-foreground whitespace-pre-wrap"
+                        : "bg-muted text-foreground border"
+                    )}
+                  >
+                    {m.role === "user" ? (
+                      m.content
+                    ) : (
+                      <div className="prose-chat">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                      </div>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
-      ))}
+      </div>
     </div>
   );
 }

@@ -31,13 +31,14 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // Use getSession() in middleware — it's local-only (decodes the JWT from the
-  // cookie) and avoids a network round-trip to Supabase for every request. The
-  // page/route handlers still call getUser() when they need a verified user.
+  // Use getUser() here even though it makes a network call to Supabase.
+  // getSession() decodes the cookie locally and can return a "user" for a
+  // session that the server-side has already invalidated — that produces a
+  // redirect loop when middleware says "you're in, go to /chat" but the page's
+  // own getUser() says "no, you're not, go to /login".
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const user = session?.user ?? null;
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
 
