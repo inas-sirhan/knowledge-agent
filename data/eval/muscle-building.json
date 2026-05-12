@@ -1,7 +1,7 @@
 [
-  { "q": "Does creatine actually work for muscle growth?", "expects": ["creatine", "monohydrate"] },
-  { "q": "How much protein per day if I'm trying to gain muscle as a skinny guy?", "expects": ["protein", "gram", "kg", "body"] },
-  { "q": "Recommend a starting routine for a hardgainer.", "expects": ["[1]"] },
-  { "q": "Is BCAA worth taking if I already hit my protein target?", "expects": ["bcaa", "protein", "leucine", "no", "unnecessary"] },
-  { "q": "What's the best way to optimize my SQL queries?", "expects": ["don't know", "doesn't", "outside", "knowledge base", "off-topic"] }
+  { "q": "Does creatine actually work for muscle growth?", "expects": ["creatine", "evidence", "monohydrate", "strong", "yes"] },
+  { "q": "How much protein per day if I'm trying to gain muscle as a skinny guy?", "expects": ["protein", "g/kg", "gram", "1.6", "2.2", "bodyweight"] },
+  { "q": "Recommend a starting routine for a hardgainer.", "expects": ["full-body", "full body", "upper", "lower", "ppl", "beginner", "compound"] },
+  { "q": "Is BCAA worth taking if I already hit my protein target?", "expects": ["no", "not", "redundant", "bcaa", "save"] },
+  { "q": "What's the best way to optimize my SQL queries?", "expects": ["can't", "cannot", "don't know", "doesn't", "outside", "knowledge base", "off-topic", "muscle", "hypertrophy"] }
 ]
