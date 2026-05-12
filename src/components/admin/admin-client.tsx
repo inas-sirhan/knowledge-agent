@@ -257,25 +257,50 @@ function AddSourceForm({ kind, onDone, onCancel }: { kind: "paste" | "url" | "up
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const toast = useToast();
+  const confirm = useConfirm();
+
+  async function postIngest(force: boolean): Promise<Response> {
+    const qs = force ? "?force=1" : "";
+    if (kind === "upload" && file) {
+      const fd = new FormData();
+      fd.set("file", file);
+      if (title) fd.set("title", title);
+      return fetch(`/api/ingest${qs}`, { method: "POST", body: fd });
+    }
+    const body =
+      kind === "paste"
+        ? { type: "paste", title, text }
+        : kind === "url"
+          ? { type: "url", url, title }
+          : { type: "upload", filename: title, text };
+    return fetch(`/api/ingest${qs}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setError(null);
     try {
-      let res: Response;
-      if (kind === "upload" && file) {
-        const fd = new FormData();
-        fd.set("file", file);
-        if (title) fd.set("title", title);
-        res = await fetch("/api/ingest", { method: "POST", body: fd });
-      } else {
-        let body: unknown;
-        if (kind === "paste") body = { type: "paste", title, text };
-        else if (kind === "url") body = { type: "url", url, title };
-        else body = { type: "upload", filename: title, text };
-        res = await fetch("/api/ingest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      let res = await postIngest(false);
+      let j = await res.json();
+      if (res.status === 409 && j?.error === "duplicate" && j.duplicate) {
+        const ok = await confirm({
+          title: "Already in your knowledge base",
+          description: `Identical content was ingested earlier as “${j.duplicate.title}” on ${formatDate(j.duplicate.created_at)}. Replace it?`,
+          confirmLabel: "Replace",
+          destructive: true,
+        });
+        if (!ok) {
+          toast.info("Ingest cancelled", "Existing copy left in place.");
+          setBusy(false);
+          return;
+        }
+        res = await postIngest(true);
+        j = await res.json();
       }
-      const j = await res.json();
       if (!res.ok) throw new Error(j.error || `failed (${res.status})`);
       toast.success(
         "Document ingested",

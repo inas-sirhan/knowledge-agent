@@ -7,17 +7,23 @@ create extension if not exists pg_trgm;
 
 -- ---------- documents ----------
 create table if not exists public.documents (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null references auth.users(id) on delete cascade,
-  title       text not null,
-  source_type text not null check (source_type in ('paste','upload','url')),
-  source_url  text,
-  raw_text    text not null,
-  metadata    jsonb not null default '{}'::jsonb,
-  token_count int not null default 0,
-  created_at  timestamptz not null default now()
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  title        text not null,
+  source_type  text not null check (source_type in ('paste','upload','url')),
+  source_url   text,
+  raw_text     text not null,
+  metadata     jsonb not null default '{}'::jsonb,
+  token_count  int not null default 0,
+  content_hash text,
+  created_at   timestamptz not null default now()
 );
-create index if not exists documents_user_idx on public.documents(user_id, created_at desc);
+
+-- Existing installs: add the column if upgrading from an older schema.
+alter table public.documents add column if not exists content_hash text;
+
+create index if not exists documents_user_idx      on public.documents(user_id, created_at desc);
+create index if not exists documents_user_hash_idx on public.documents(user_id, content_hash);
 
 -- ---------- chunks ----------
 create table if not exists public.chunks (

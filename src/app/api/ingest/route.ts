@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { ingestText, fetchUrlAsText, pdfBufferToText } from "@/lib/ingest";
+import { ingestText, fetchUrlAsText, pdfBufferToText, DuplicateContentError } from "@/lib/ingest";
+
+function duplicateResponse(err: DuplicateContentError) {
+  return NextResponse.json(
+    {
+      error: "duplicate",
+      message: err.message,
+      duplicate: err.duplicate,
+    },
+    { status: 409 }
+  );
+}
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -34,6 +45,8 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const contentType = req.headers.get("content-type") || "";
+
+  const force = new URL(req.url).searchParams.get("force") === "1";
 
   // --- multipart/form-data: PDF or arbitrary file upload ---
   if (contentType.startsWith("multipart/form-data")) {
@@ -81,9 +94,11 @@ export async function POST(req: Request) {
         rawText: text,
         sourceType: "upload",
         metadata,
+        force,
       });
       return NextResponse.json({ ok: true, ...result });
     } catch (err) {
+      if (err instanceof DuplicateContentError) return duplicateResponse(err);
       console.error("ingest (multipart) error", err);
       return NextResponse.json(
         { error: (err as Error).message ?? "ingest failed" },
@@ -107,6 +122,7 @@ export async function POST(req: Request) {
         title: parsed.title,
         rawText: parsed.text,
         sourceType: "paste",
+        force,
       });
       return NextResponse.json({ ok: true, ...result });
     }
@@ -116,6 +132,7 @@ export async function POST(req: Request) {
         title: parsed.filename,
         rawText: parsed.text,
         sourceType: "upload",
+        force,
       });
       return NextResponse.json({ ok: true, ...result });
     }
@@ -130,9 +147,11 @@ export async function POST(req: Request) {
       rawText: text,
       sourceType: "url",
       sourceUrl: parsed.url,
+      force,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
+    if (err instanceof DuplicateContentError) return duplicateResponse(err);
     console.error("ingest error", err);
     return NextResponse.json({ error: (err as Error).message ?? "ingest failed" }, { status: 500 });
   }

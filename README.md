@@ -195,6 +195,7 @@ user. To swap in different content for either KB, drop new `.md` files into the 
 | `npm run eval` | Run golden-question eval harness against both KBs |
 | `npm run test:isolation` | Verify RLS isolation between users (six checks) |
 | `npm run test:pdf <file.pdf>` | End-to-end PDF parse → chunk → embed → retrieve test |
+| `npm run test:dedupe` | Smoke test for the content-hash dedupe guard |
 | `npm run db:push` | Reminder/instruction for applying the SQL migration |
 
 ---
