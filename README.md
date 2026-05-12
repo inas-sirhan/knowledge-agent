@@ -17,7 +17,8 @@ and per-account isolation.
 Switching accounts visibly changes persona, sources, and recommendations. Cross-user reads are
 blocked at the database layer by Postgres RLS — see `npm run test:isolation`.
 
-> Credentials are configurable via `SEED_USER_*` env vars (see `.env.example`).
+> The demo credentials are hard-coded in [scripts/_lib.ts](scripts/_lib.ts) so reviewers can
+> clone, seed, and log in with no extra setup.
 
 ---
 
@@ -47,9 +48,10 @@ git clone <this-repo>
 cd ai-agent
 cp .env.example .env.local        # then fill in the values
 npm install
-# Apply the schema (option 1: Supabase CLI)
-#   supabase db push
-# (option 2: open Supabase dashboard → SQL editor → paste supabase/migrations/0001_init.sql)
+# Apply the schema in your Supabase project's SQL editor:
+#   1. supabase/migrations/0001_init.sql   (tables, RLS, hybrid retrieval RPC)
+#   2. supabase/migrations/0002_content_hash.sql   (idempotent — adds content_hash column)
+# (Or run them via the Supabase CLI: `supabase db push`)
 npm run seed                       # creates demo users + ingests their KBs
 npm run dev
 ```
@@ -196,7 +198,10 @@ user. To swap in different content for either KB, drop new `.md` files into the 
 | `npm run test:isolation` | Verify RLS isolation between users (six checks) |
 | `npm run test:pdf <file.pdf>` | End-to-end PDF parse → chunk → embed → retrieve test |
 | `npm run test:dedupe` | Smoke test for the content-hash dedupe guard |
-| `npm run db:push` | Reminder/instruction for applying the SQL migration |
+| `npm run test:e2e` | Playwright e2e suite — smoke + crawl. Requires `npm run dev` running. |
+| `npm run test:e2e:build` | Same, but spins up a fresh production server first (slower but rock-solid in CI) |
+| `npm run test:e2e:ui` | Playwright's interactive UI mode for debugging tests |
+| `npm run db:push` | Reminder/instruction for applying the SQL migrations |
 
 ---
 
