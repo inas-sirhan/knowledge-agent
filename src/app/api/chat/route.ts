@@ -13,6 +13,7 @@ import { openai } from "@ai-sdk/openai";
 import { createClient } from "@/lib/supabase/server";
 import { retrieve, buildContextBlock } from "@/lib/retrieve";
 import { buildSystemPrompt } from "@/lib/persona";
+import { smartTitle } from "@/lib/utils";
 import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
       .join("\n") ?? "";
 
   if (!conversationId) {
-    const title = lastUserText.slice(0, 60) || "New conversation";
+    const title = smartTitle(lastUserText, 60) || "New conversation";
     const { data: convRow, error: convErr } = await supabase
       .from("conversations")
       .insert({ user_id: user.id, title })
@@ -119,7 +120,7 @@ export async function POST(req: Request) {
     rerank: cfg.rerank_enabled,
   });
 
-  const { contextText, citations } = buildContextBlock(initialChunks);
+  const { contextText, citations: initialCitations } = buildContextBlock(initialChunks);
   const finalConvId = conversationId;
 
   const systemPrompt = buildSystemPrompt({
@@ -129,43 +130,67 @@ export async function POST(req: Request) {
     hasContext: initialChunks.length > 0,
   });
 
-  // The optional `search_kb` tool lets the model do an additional retrieval
-  // step when it needs to refocus a follow-up question.
-  const tools = {
-    search_kb: tool({
-      description:
-        "Search the knowledge base for additional chunks relevant to a focused query. Use ONLY when the initial context is insufficient.",
-      inputSchema: z.object({
-        query: z.string().describe("A focused search query in natural language."),
-      }),
-      execute: async ({ query }) => {
-        const more = await retrieve(supabase, user.id, query, {
-          topK: 6,
-          candidateK: 16,
-          rerank: cfg.rerank_enabled,
-        });
-        return more.map((c, i) => ({
-          n: citations.length + i + 1,
-          chunk_id: c.id,
-          title: c.document_title,
-          url: c.source_url,
-          excerpt: c.content.slice(0, 600),
-        }));
-      },
-    }),
-  } as const;
+  // Mutable accumulator — initial retrieval + every chunk surfaced by the
+  // search_kb tool. We broadcast updates to the client as the tool fires,
+  // and we persist the final list with the assistant message.
+  const seenChunkIds = new Set<string>(initialCitations.map((c) => c.chunk_id));
+  const accumulated: typeof initialCitations = [...initialCitations];
 
   const modelMessages = await convertToModelMessages(messages);
 
   const stream = createUIMessageStream({
     execute: ({ writer }) => {
-      // Send the conversationId as message metadata so the client can persist it.
       writer.write({ type: "message-metadata", messageMetadata: { conversationId: finalConvId } });
 
-      // Surface citations as a custom data part the client renders below the message.
-      if (citations.length > 0) {
-        writer.write({ type: "data-citations", data: citations });
+      // Same `id` on subsequent writes updates the existing data part in place.
+      if (accumulated.length > 0) {
+        writer.write({ type: "data-citations", id: "citations", data: [...accumulated] });
       }
+
+      // The optional `search_kb` tool lets the model do an additional retrieval
+      // step when it needs to refocus a follow-up question. Newly retrieved
+      // chunks are appended to `accumulated` and re-broadcast so the citation
+      // chips in the UI grow live as the tool fires.
+      const tools = {
+        search_kb: tool({
+          description:
+            "Search the knowledge base for additional chunks relevant to a focused query. Use ONLY when the initial context is insufficient.",
+          inputSchema: z.object({
+            query: z.string().describe("A focused search query in natural language."),
+          }),
+          execute: async ({ query }) => {
+            const more = await retrieve(supabase, user.id, query, {
+              topK: 6,
+              candidateK: 16,
+              rerank: cfg.rerank_enabled,
+            });
+            const newOnes: typeof initialCitations = [];
+            for (const c of more) {
+              if (seenChunkIds.has(c.id)) continue;
+              seenChunkIds.add(c.id);
+              accumulated.push({
+                n: accumulated.length + 1,
+                chunk_id: c.id,
+                document_id: c.document_id,
+                title: c.document_title,
+                url: c.source_url ?? null,
+              });
+              newOnes.push(accumulated[accumulated.length - 1]);
+            }
+            if (newOnes.length > 0) {
+              writer.write({ type: "data-citations", id: "citations", data: [...accumulated] });
+            }
+            // Hand the model concise excerpts so it can decide to cite them.
+            return more.map((c, i) => ({
+              n: accumulated.length - more.length + i + 1,
+              chunk_id: c.id,
+              title: c.document_title,
+              url: c.source_url,
+              excerpt: c.content.slice(0, 600),
+            }));
+          },
+        }),
+      } as const;
 
       const result = streamText({
         model: openai(cfg.model),
@@ -180,7 +205,7 @@ export async function POST(req: Request) {
             user_id: user.id,
             role: "assistant",
             content: text,
-            citations,
+            citations: accumulated,
             token_usage: {
               prompt: usage?.inputTokens ?? null,
               completion: usage?.outputTokens ?? null,

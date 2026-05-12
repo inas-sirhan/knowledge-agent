@@ -11,5 +11,10 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) return NextResponse.redirect(`${origin}${next}`);
   }
-  return NextResponse.redirect(`${origin}/login?error=auth_callback`);
+  // Preserve the intended destination so the user lands where they tried to go
+  // after they sign in again.
+  const failUrl = new URL(`${origin}/login`);
+  failUrl.searchParams.set("error", "auth_callback");
+  if (next && next !== "/chat") failUrl.searchParams.set("next", next);
+  return NextResponse.redirect(failUrl);
 }
