@@ -579,8 +579,17 @@ function ConversationsTab() {
   );
 }
 
+interface Citation { n: number; chunk_id: string; document_id: string; title?: string; url?: string | null }
+interface ConvMessage {
+  id: string;
+  role: string;
+  content: string;
+  citations?: Citation[];
+  created_at: string;
+}
+
 function ConversationModal({ conv, onClose }: { conv: Conv; onClose: () => void }) {
-  const [msgs, setMsgs] = useState<{ id: string; role: string; content: string; created_at: string }[] | null>(null);
+  const [msgs, setMsgs] = useState<ConvMessage[] | null>(null);
 
   useEffect(() => {
     fetch(`/api/conversations/${conv.id}`).then(async (r) => {
@@ -604,12 +613,15 @@ function ConversationModal({ conv, onClose }: { conv: Conv; onClose: () => void 
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="conversation-modal-title"
         className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border bg-card shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-start justify-between gap-4 border-b px-5 py-4">
           <div className="min-w-0 flex-1">
-            <h3 className="truncate font-semibold tracking-tight">{conv.title}</h3>
+            <h3 id="conversation-modal-title" className="truncate font-semibold tracking-tight">{conv.title}</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {conv.message_count} messages · created {formatDate(conv.created_at)} · last updated {formatDate(conv.updated_at)}
             </p>
@@ -626,29 +638,49 @@ function ConversationModal({ conv, onClose }: { conv: Conv; onClose: () => void 
             <p className="text-sm text-muted-foreground">No messages in this conversation.</p>
           ) : (
             <ol className="flex flex-col gap-5">
-              {msgs.map((m) => (
-                <li key={m.id} className={cn("flex flex-col gap-2", m.role === "user" ? "items-end" : "items-start")}>
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {m.role} · {formatDate(m.created_at)}
-                  </div>
-                  <div
-                    className={cn(
-                      "max-w-[88%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
-                      m.role === "user"
-                        ? "bg-primary text-primary-foreground whitespace-pre-wrap"
-                        : "bg-muted text-foreground border"
-                    )}
-                  >
-                    {m.role === "user" ? (
-                      m.content
-                    ) : (
-                      <div className="prose-chat">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+              {msgs.map((m) => {
+                const cites = Array.isArray(m.citations) ? m.citations : [];
+                return (
+                  <li key={m.id} className={cn("flex flex-col gap-2", m.role === "user" ? "items-end" : "items-start")}>
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {m.role} · {formatDate(m.created_at)}
+                    </div>
+                    <div
+                      className={cn(
+                        "max-w-[88%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+                        m.role === "user"
+                          ? "bg-primary text-primary-foreground whitespace-pre-wrap"
+                          : "bg-muted text-foreground border"
+                      )}
+                    >
+                      {m.role === "user" ? (
+                        m.content
+                      ) : (
+                        <div className="prose-chat">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                        </div>
+                      )}
+                    </div>
+                    {m.role !== "user" && cites.length > 0 && (
+                      <div className="flex max-w-[88%] flex-wrap gap-1.5">
+                        {cites.map((c) => (
+                          <a
+                            key={c.n}
+                            href={c.url || "#"}
+                            target={c.url ? "_blank" : undefined}
+                            rel={c.url ? "noopener noreferrer" : undefined}
+                            className="inline-flex items-center gap-1 rounded-md border bg-card px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                            title={c.title || c.chunk_id}
+                          >
+                            <span className="font-medium text-foreground">[{c.n}]</span>
+                            <span className="max-w-[140px] truncate">{c.title || "source"}</span>
+                          </a>
+                        ))}
                       </div>
                     )}
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ol>
           )}
         </div>

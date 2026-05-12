@@ -60,6 +60,9 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             onClick={() => close(false)}
           >
             <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="confirm-dialog-title"
               className="w-full max-w-md rounded-lg border bg-card shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
@@ -70,7 +73,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold leading-tight">{state.opts.title}</h3>
+                  <h3 id="confirm-dialog-title" className="font-semibold leading-tight">{state.opts.title}</h3>
                   {state.opts.description && (
                     <p className="mt-1 text-sm text-muted-foreground">{state.opts.description}</p>
                   )}

@@ -83,7 +83,17 @@ export async function POST(req: Request) {
     }
     conversationId = convRow.id as string;
   } else {
-    // touch updated_at
+    // Verify the caller actually owns this conversation. RLS would prevent
+    // cross-user reads anyway, but checking here gives a clean 404 instead of
+    // silently writing messages that the legitimate owner can never see.
+    const { data: owned } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("id", conversationId)
+      .maybeSingle();
+    if (!owned) {
+      return NextResponse.json({ error: "conversation not found" }, { status: 404 });
+    }
     await supabase
       .from("conversations")
       .update({ updated_at: new Date().toISOString() })
