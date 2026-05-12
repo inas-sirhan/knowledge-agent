@@ -343,6 +343,7 @@ a `.pdf` / `.md` / `.txt` file — the same pipeline runs.
 | `npm run test:isolation` | Verify RLS isolation between users (six checks) |
 | `npm run test:pdf <file.pdf>` | End-to-end PDF parse → chunk → embed → retrieve test |
 | `npm run test:dedupe` | Smoke test for the content-hash dedupe guard |
+| `npm run test:signup` | End-to-end signup test (user creation → trigger → defaults → isolation) |
 | `npm run test:e2e` | Playwright e2e suite — smoke + crawl. Requires `npm run dev` running. |
 | `npm run test:e2e:build` | Same, but spins up a fresh production server first (slower but rock-solid in CI) |
 | `npm run test:e2e:ui` | Playwright's interactive UI mode for debugging tests |
