@@ -41,39 +41,142 @@ blocked at the database layer by Postgres RLS — see `npm run test:isolation`.
 
 ---
 
-## Setup (local, ~5 minutes)
+## Run it locally — step by step
+
+Total time: ~10 minutes the first time, mostly waiting on `npm install`.
+You will need free accounts at **Supabase**, **OpenAI**, and optionally **Cohere**.
+
+### 1. Clone and install
 
 ```bash
-git clone <this-repo>
-cd ai-agent
-cp .env.example .env.local        # then fill in the values
+git clone https://github.com/inas-sirhan/knowledge-agent.git
+cd knowledge-agent
 npm install
-# Apply the schema in your Supabase project's SQL editor:
-#   1. supabase/migrations/0001_init.sql   (tables, RLS, hybrid retrieval RPC)
-#   2. supabase/migrations/0002_content_hash.sql   (idempotent — adds content_hash column)
-# (Or run them via the Supabase CLI: `supabase db push`)
-npm run seed                       # creates demo users + ingests their KBs
+cp .env.example .env.local
+```
+
+Leave `.env.local` open in your editor — you'll fill values into it as you go.
+
+### 2. Create a Supabase project (free tier)
+
+1. Go to [supabase.com](https://supabase.com) → **New project**
+2. Set a project name and database password (save the password in a password manager — you won't need it for this app, only for direct DB access later)
+3. Pick a region close to you (or close to Vercel if you'll deploy)
+4. Wait ~2 minutes for the project to provision
+
+Once it's ready, open **Project Settings → API Keys** (or **Data API**) and copy three values into `.env.local`:
+
+| Settings field | `.env.local` variable |
+|---|---|
+| Project URL (e.g. `https://abc123.supabase.co`) | `NEXT_PUBLIC_SUPABASE_URL` |
+| Publishable key (`sb_publishable_...`) — or legacy "anon" JWT | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
+| Secret key (`sb_secret_...`) — or legacy "service_role" JWT | `SUPABASE_SERVICE_ROLE_KEY` |
+
+> Supabase shipped a new key format (`sb_publishable_*` / `sb_secret_*`) in 2025.
+> The env-var names in this app still say `..._ANON_KEY` and `..._SERVICE_ROLE_KEY`
+> for backwards compatibility, but the new keys work fine — same wire format.
+
+### 3. Apply the database schema
+
+In your Supabase dashboard, open **SQL Editor → New query**, paste the entire contents of
+[supabase/migrations/0001_init.sql](supabase/migrations/0001_init.sql), and click **Run**.
+
+You should see "Success. No rows returned." If you check **Table Editor**, you'll find five
+new tables (`documents`, `chunks`, `conversations`, `messages`, `agent_config`) each with a 🔒
+icon (Row-Level Security enabled).
+
+> The migration is **idempotent** — re-running it on an existing schema is safe.
+
+### 4. Get an OpenAI API key
+
+1. Go to [platform.openai.com](https://platform.openai.com) → **API keys** → **Create new secret key**
+2. Add ~$2 of credit (covers embedding both demo KBs + extensive chat usage)
+3. Paste into `.env.local`:
+
+```
+OPENAI_API_KEY=sk-proj-...
+```
+
+### 5. (Optional) Get a Cohere API key for rerank
+
+1. Sign up at [dashboard.cohere.com](https://dashboard.cohere.com) (free)
+2. Copy your trial API key
+3. Paste into `.env.local`:
+
+```
+COHERE_API_KEY=...
+```
+
+Skip this and the rerank step becomes a graceful no-op — retrieval falls back to the
+RRF-fused hybrid score. Slightly worse answer quality, no other impact.
+
+### 6. Seed the demo accounts + content
+
+```bash
+npm run seed
+```
+
+This creates two users (`alice@demo.local` / `bob@demo.local`) in your Supabase project and
+ingests their pre-built knowledge bases from `data/seed/`. Expect this to take ~30 seconds —
+most of it is OpenAI embedding calls.
+
+You'll see output like:
+
+```
+→ Seeding A: alice@demo.local
+  · ingesting "Neapolitan pizza — the canonical style" … 5 chunks, ~2,300 tokens
+  ...
+  ✓ Pizza Making: 24 docs, 88 chunks, ~45,381 tokens
+```
+
+### 7. Run the app
+
+```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and log in with one of the demo accounts.
+Open [http://localhost:3000](http://localhost:3000). Click "Try demo accounts →", hit **Demo A**
+or **Demo B**, click **Sign in**, and start chatting.
 
-### Required env vars
+### 8. Verify everything works (optional sanity checks)
 
-See [.env.example](.env.example). The minimum to boot the app:
+```bash
+npm run test:isolation   # 6/6 — RLS keeps users from seeing each other's KBs
+npm run eval             # 10/10 — golden questions against both KBs
+```
 
-- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — from
-  Supabase project → Settings → API.
-- `OPENAI_API_KEY` — used for both embeddings (`text-embedding-3-small`) and chat (`gpt-4o-mini`
-  by default).
-- `COHERE_API_KEY` — optional. When unset, rerank is a no-op and we fall back to the RRF-fused
-  hybrid score.
+---
 
-### Seed knowledge bases
+### Required env vars at a glance
 
-`npm run seed` reads `data/seed/<folder>/*.md` and ingests one document per file for each demo
-user. To swap in different content for either KB, drop new `.md` files into the matching folder
-(see [data/seed/README.md](data/seed/README.md)) and re-run `npm run seed`.
+See [.env.example](.env.example) for the full list with placeholders. Required:
+
+| Variable | Source |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Settings → API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase publishable / anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase secret / service-role key (**server-only**) |
+| `OPENAI_API_KEY` | platform.openai.com |
+| `COHERE_API_KEY` | Optional — dashboard.cohere.com |
+
+### Bringing your own knowledge base
+
+Drop `.md` or `.txt` files into `data/seed/<folder>/` (one per document), then re-run
+`npm run seed`. Folder names map to demo users in [scripts/_lib.ts](scripts/_lib.ts).
+
+Or, after signing in, use the **Admin → Sources** tab to paste text, fetch a URL, or upload
+a `.pdf` / `.md` / `.txt` file — the same pipeline runs.
+
+### Common setup gotchas
+
+- **Migration error "vector type not available"** — pgvector isn't enabled. The first line of
+  `0001_init.sql` does `create extension if not exists vector;`. If your Supabase plan blocks
+  extensions, you'll need to enable it via the dashboard's Database → Extensions page.
+- **`npm run seed` says "Missing env: NEXT_PUBLIC_SUPABASE_URL"** — your `.env.local` is empty
+  or in the wrong directory. It must live at the repo root.
+- **Chat answers are empty / 401** — your `OPENAI_API_KEY` is missing or has no credit.
+- **`pdf-parse` fails on a specific PDF** — most likely a scanned image PDF without OCR. The
+  parser only extracts embedded text.
 
 ---
 
@@ -201,7 +304,7 @@ user. To swap in different content for either KB, drop new `.md` files into the 
 | `npm run test:e2e` | Playwright e2e suite — smoke + crawl. Requires `npm run dev` running. |
 | `npm run test:e2e:build` | Same, but spins up a fresh production server first (slower but rock-solid in CI) |
 | `npm run test:e2e:ui` | Playwright's interactive UI mode for debugging tests |
-| `npm run db:push` | Reminder/instruction for applying the SQL migrations |
+| `npm run db:push` | Reminder/instruction for applying the SQL migration |
 
 ---
 
