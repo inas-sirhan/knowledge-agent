@@ -18,7 +18,10 @@ Switching accounts visibly changes persona, sources, and recommendations. Cross-
 blocked at the database layer by Postgres RLS — see `npm run test:isolation`.
 
 > The demo credentials are hard-coded in [scripts/_lib.ts](scripts/_lib.ts) so reviewers can
-> clone, seed, and log in with no extra setup.
+> clone, seed, and log in with no extra setup. The seed script gives each demo user
+> **500 chat credits + 30 ingest credits** — far more than any review session needs. New
+> signups start with **0 credits** so a randomly-signed-up account can't drain the OpenAI
+> bill. Credits are enforced in production only (`NODE_ENV=production`).
 
 ---
 
@@ -73,12 +76,17 @@ Each row is annotated with where it came from: ✅ = required by the spec,
 | ✨ Citation chips as a custom `data-citations` UI message part (typed end-to-end) | [chat route](src/app/api/chat/route.ts), [chat.tsx](src/components/chat/chat.tsx) |
 | ✨ Toast notifications + custom confirm modal (no native `alert`/`confirm`) | [src/components/ui/toast.tsx](src/components/ui/toast.tsx), [confirm-dialog.tsx](src/components/ui/confirm-dialog.tsx) |
 | ✨ Markdown rendering inside admin conversation modal (citations preserved) | [admin-client.tsx](src/components/admin/admin-client.tsx) `ConversationModal` |
-| ✨ ARIA-correct dialogs (`role="dialog"`, `aria-modal`, `aria-labelledby`) | confirm + conversation modals |
+| ✨ ARIA-correct dialogs (`role="dialog"`, `aria-modal`, `aria-labelledby`) | confirm + conversation modals + citation drawer + mobile nav |
 | ✨ Top-bar nav progress indicator on route transitions | [src/components/nav-progress.tsx](src/components/nav-progress.tsx) |
 | ✨ Dark mode via `prefers-color-scheme` | [src/app/globals.css](src/app/globals.css) |
 | ✨ Hand-curated reference docs alongside RSS-fetched seed | `data/seed/muscle-building/000-supplement-catalog.md`, `data/seed/pizza-making/000a-style-neapolitan.md`, etc. |
+| ✨ **Per-user credit budgets** (production abuse prevention) — atomic Postgres decrement, 0/0 default for signups, 500/30 for demo users | [src/lib/credits.ts](src/lib/credits.ts), [supabase/migrations/0003_credits.sql](supabase/migrations/0003_credits.sql), `npm run test:credits` |
+| ✨ **Citation drawer** — click any citation chip → side panel with the cited chunk, markdown-rendered + "Open original source ↗" link | [src/components/chat/citation-drawer.tsx](src/components/chat/citation-drawer.tsx), [src/app/api/chunks/\[id\]/route.ts](src/app/api/chunks/[id]/route.ts) |
+| ✨ **Conversation history sidebar** with click-to-resume | [src/components/sidebar-conversations.tsx](src/components/sidebar-conversations.tsx) + `/chat?conv=<id>` hydrated from saved messages |
+| ✨ **KB-aware empty state** — persona-driven title + blurb + four KB-specific starter prompts | [src/lib/starter-prompts.ts](src/lib/starter-prompts.ts) |
+| ✨ **Mobile slide-out drawer** with same content as the desktop sidebar | [src/components/mobile-nav-drawer.tsx](src/components/mobile-nav-drawer.tsx) |
 | ✨ Playwright e2e suite (smoke + crawl) | [e2e/](e2e/) — `npm run test:e2e` |
-| ✨ Targeted PDF + dedupe test scripts | `npm run test:pdf`, `npm run test:dedupe` |
+| ✨ Targeted backend test scripts — RLS isolation, PDF parsing, content-hash dedupe, signup trigger, credits concurrency, paste / URL / upload paths | `npm run test:isolation`, `test:pdf`, `test:dedupe`, `test:signup`, `test:credits`, `test:ingest` |
 | ✨ Loading skeletons for App Router route transitions | `loading.tsx` in each `(app)` segment |
 
 ---
@@ -120,14 +128,17 @@ Once it's ready, open **Project Settings → API Keys** (or **Data API**) and co
 
 ### 3. Apply the database schema
 
-In your Supabase dashboard, open **SQL Editor → New query**, paste the entire contents of
-[supabase/migrations/0001_init.sql](supabase/migrations/0001_init.sql), and click **Run**.
+In your Supabase dashboard, open **SQL Editor → New query** and apply both migrations:
 
-You should see "Success. No rows returned." If you check **Table Editor**, you'll find five
-new tables (`documents`, `chunks`, `conversations`, `messages`, `agent_config`) each with a 🔒
-icon (Row-Level Security enabled).
+1. Paste [supabase/migrations/0001_init.sql](supabase/migrations/0001_init.sql) → **Run**
+2. Then [supabase/migrations/0003_credits.sql](supabase/migrations/0003_credits.sql) → **Run**
 
-> The migration is **idempotent** — re-running it on an existing schema is safe.
+You should see "Success. No rows returned." for both. If you check **Table Editor**, you'll
+find six tables (`documents`, `chunks`, `conversations`, `messages`, `agent_config`,
+`user_credits`) each with a 🔒 icon (Row-Level Security enabled).
+
+> Both migrations are **idempotent** — re-running them is safe. The credits migration
+> (0003) is what protects the deployed demo from runaway API spend.
 
 ### 4. Get an OpenAI API key
 
@@ -344,6 +355,8 @@ a `.pdf` / `.md` / `.txt` file — the same pipeline runs.
 | `npm run test:pdf <file.pdf>` | End-to-end PDF parse → chunk → embed → retrieve test |
 | `npm run test:dedupe` | Smoke test for the content-hash dedupe guard |
 | `npm run test:signup` | End-to-end signup test (user creation → trigger → defaults → isolation) |
+| `npm run test:credits` | Credit decrement / concurrency / locked-signup test (11 checks) |
+| `npm run test:ingest` | Paste / URL / text-upload pipeline test (8 checks) |
 | `npm run test:e2e` | Playwright e2e suite — smoke + crawl. Requires `npm run dev` running. |
 | `npm run test:e2e:build` | Same, but spins up a fresh production server first (slower but rock-solid in CI) |
 | `npm run test:e2e:ui` | Playwright's interactive UI mode for debugging tests |
