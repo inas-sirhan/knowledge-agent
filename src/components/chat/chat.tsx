@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, createContext, useContext } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import ReactMarkdown from "react-markdown";
@@ -10,6 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Spinner } from "@/components/ui/spinner";
 import { Send, Square, BookOpen, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CitationDrawer } from "./citation-drawer";
+
+const CitationDrawerContext = createContext<(c: ChatCitation) => void>(() => {});
 
 export interface ChatCitation {
   n: number;
@@ -19,6 +22,12 @@ export interface ChatCitation {
   url?: string | null;
 }
 
+export interface KbIntroProps {
+  title: string;
+  blurb: string;
+  prompts: string[];
+}
+
 export interface ChatProps {
   conversationId?: string;
   startingMessages?: UIMessage[];
@@ -26,11 +35,20 @@ export interface ChatProps {
   onConversationCreated?: (id: string) => void;
   /** Compact mode for the embeddable widget. */
   compact?: boolean;
+  /** KB intro text + starter prompts for the empty state. */
+  intro?: KbIntroProps;
 }
 
-export default function Chat({ startingMessages, conversationId, onConversationCreated, compact }: ChatProps) {
+export default function Chat({
+  startingMessages,
+  conversationId,
+  onConversationCreated,
+  compact,
+  intro,
+}: ChatProps) {
   const [convId, setConvId] = useState<string | undefined>(conversationId);
   const [input, setInput] = useState("");
+  const [activeCitation, setActiveCitation] = useState<ChatCitation | null>(null);
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -44,11 +62,14 @@ export default function Chat({ startingMessages, conversationId, onConversationC
     transport,
     messages: startingMessages,
     onFinish: ({ message }) => {
-      // The server sends back the conversationId in the message metadata.
       const meta = (message as unknown as { metadata?: { conversationId?: string } }).metadata;
       if (meta?.conversationId && meta.conversationId !== convId) {
         setConvId(meta.conversationId);
         onConversationCreated?.(meta.conversationId);
+      }
+      // Let the sidebar conversation list refresh.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("conversation-updated"));
       }
     },
   });
@@ -69,10 +90,11 @@ export default function Chat({ startingMessages, conversationId, onConversationC
   }
 
   return (
+    <CitationDrawerContext.Provider value={(c) => setActiveCitation(c)}>
     <div className={cn("flex h-full flex-col", compact ? "" : "")}>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6">
         {messages.length === 0 ? (
-          <EmptyState compact={compact} onPick={(p) => sendMessage({ text: p })} />
+          <EmptyState compact={compact} intro={intro} onPick={(p) => sendMessage({ text: p })} />
         ) : (
           <div className="mx-auto flex max-w-3xl flex-col gap-5">
             {messages.map((m) => (
@@ -83,7 +105,13 @@ export default function Chat({ startingMessages, conversationId, onConversationC
                 <Spinner /> thinking…
               </div>
             )}
-            {error && <div className="text-sm text-destructive">Something went wrong. Try again.</div>}
+            {error && (
+              <div className="text-sm text-destructive">
+                {/out[_ ]of[_ ]credits|chat credits/i.test(error.message)
+                  ? "You're out of chat credits. Sign in as a demo user, or ask an admin to top you up."
+                  : "Something went wrong. Try again."}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -132,27 +160,64 @@ export default function Chat({ startingMessages, conversationId, onConversationC
         </div>
       </form>
     </div>
+    <CitationDrawer
+      chunkId={activeCitation?.chunk_id ?? null}
+      citationNumber={activeCitation?.n}
+      onClose={() => setActiveCitation(null)}
+    />
+    </CitationDrawerContext.Provider>
   );
 }
 
-function EmptyState({ compact, onPick }: { compact?: boolean; onPick: (p: string) => void }) {
-  const prompts = [
-    "Summarise the most important ideas in this knowledge base.",
-    "I'm new here — where should I start?",
-    "Recommend three things I should read next.",
-    "What's a common misconception this material clears up?",
-  ];
+function CitationChips({ citations }: { citations: ChatCitation[] }) {
+  const openDrawer = useContext(CitationDrawerContext);
+  return (
+    <div className="flex max-w-[85%] flex-wrap gap-2">
+      {citations.map((c) => (
+        <button
+          key={c.n}
+          type="button"
+          onClick={() => openDrawer(c)}
+          className="inline-flex items-center gap-1 rounded-md border bg-card px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          title={`View source: ${c.title || c.chunk_id}`}
+        >
+          <BookOpen className="h-3 w-3" />
+          <span className="font-medium text-foreground">[{c.n}]</span>
+          <span className="max-w-[200px] truncate">{c.title || "source"}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({
+  compact,
+  intro,
+  onPick,
+}: {
+  compact?: boolean;
+  intro?: KbIntroProps;
+  onPick: (p: string) => void;
+}) {
+  const title = intro?.title ?? "Ask your knowledge base";
+  const blurb =
+    intro?.blurb ?? "Answers are grounded in your indexed sources, with clickable citations.";
+  const prompts =
+    intro?.prompts ?? [
+      "Summarise the most important ideas in this knowledge base.",
+      "I'm new here — where should I start?",
+      "Recommend three things I should read next.",
+      "What's a common misconception this material clears up?",
+    ];
   return (
     <div className="mx-auto flex max-w-2xl flex-col items-center px-2 pt-12 text-center">
       <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <Sparkles className="h-5 w-5" />
       </div>
-      <h2 className={cn("font-semibold tracking-tight", compact ? "text-lg" : "text-xl")}>
-        Ask your knowledge base
+      <h2 className={cn("font-semibold tracking-tight", compact ? "text-lg" : "text-2xl")}>
+        {title}
       </h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Answers are grounded in your indexed sources, with clickable citations.
-      </p>
+      <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">{blurb}</p>
       <div className="mt-6 grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
         {prompts.map((p) => (
           <button
@@ -228,24 +293,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
         </div>
       )}
 
-      {!isUser && citations.length > 0 && (
-        <div className="flex max-w-[85%] flex-wrap gap-2">
-          {citations.map((c) => (
-            <a
-              key={c.n}
-              href={c.url || "#"}
-              target={c.url ? "_blank" : undefined}
-              rel={c.url ? "noopener noreferrer" : undefined}
-              className="inline-flex items-center gap-1 rounded-md border bg-card px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              title={c.title || c.chunk_id}
-            >
-              <BookOpen className="h-3 w-3" />
-              <span className="font-medium text-foreground">[{c.n}]</span>
-              <span className="max-w-[160px] truncate">{c.title || "source"}</span>
-            </a>
-          ))}
-        </div>
-      )}
+      {!isUser && citations.length > 0 && <CitationChips citations={citations} />}
     </div>
   );
 }

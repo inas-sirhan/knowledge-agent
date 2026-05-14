@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { ingestText, fetchUrlAsText, pdfBufferToText, DuplicateContentError } from "@/lib/ingest";
+import { consumeCredit, outOfCreditsBody } from "@/lib/credits";
 
 function duplicateResponse(err: DuplicateContentError) {
   return NextResponse.json(
@@ -43,6 +44,13 @@ export async function POST(req: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  // Charge a credit BEFORE running the embedding pipeline. One credit per
+  // ingestion regardless of how big the document is — keeps the model simple.
+  const credit = await consumeCredit(supabase, user.id, "ingest");
+  if (!credit.allowed) {
+    return NextResponse.json(outOfCreditsBody("ingest"), { status: 402 });
+  }
 
   const contentType = req.headers.get("content-type") || "";
 

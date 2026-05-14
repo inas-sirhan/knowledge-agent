@@ -75,6 +75,16 @@ async function seedFor(key: SeedKey) {
     updated_at: new Date().toISOString(),
   });
 
+  // Top up credits — demo accounts get a generous budget so a reviewer can
+  // test thoroughly without ever hitting the wall. At gpt-4o-mini's pricing
+  // (~$0.001/chat, ~$0.0002/ingest) this is ~$0.50 max per demo user.
+  await a.from("user_credits").upsert({
+    user_id: userId,
+    chat_credits: 500,
+    ingest_credits: 30,
+    updated_at: new Date().toISOString(),
+  });
+
   const docs = await readDocsFromFolder(u.folder);
   console.log(`  · found ${docs.length} documents in data/seed/${u.folder}`);
   if (docs.length === 0) {

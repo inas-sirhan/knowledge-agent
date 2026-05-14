@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 import { retrieve, buildContextBlock } from "@/lib/retrieve";
 import { buildSystemPrompt } from "@/lib/persona";
 import { smartTitle } from "@/lib/utils";
+import { consumeCredit, outOfCreditsBody } from "@/lib/credits";
 import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
@@ -34,6 +35,13 @@ export async function POST(req: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  // Charge a credit BEFORE any OpenAI calls. Users with a zero balance
+  // can't make us spend money on their behalf.
+  const credit = await consumeCredit(supabase, user.id, "chat");
+  if (!credit.allowed) {
+    return NextResponse.json(outOfCreditsBody("chat"), { status: 402 });
+  }
 
   let body: { messages: UIMessage[]; conversationId?: string };
   try {

@@ -1,7 +1,10 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Sparkles, MessagesSquare, Settings, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import SidebarConversations from "@/components/sidebar-conversations";
+import MobileNavDrawer from "@/components/mobile-nav-drawer";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -25,7 +28,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             Admin
           </NavLink>
         </nav>
-        <div className="mt-auto border-t pt-3">
+
+        <div className="flex-1 overflow-y-auto">
+          <Suspense fallback={null}>
+            <SidebarConversations />
+          </Suspense>
+        </div>
+
+        <div className="border-t pt-3">
           <div className="px-2 text-xs text-muted-foreground">Signed in as</div>
           <div className="truncate px-2 text-sm font-medium" title={user.email || ""}>
             {user.email}
@@ -42,24 +52,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
       <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b px-4 py-3 md:hidden">
-          <Link href="/chat" className="inline-flex items-center gap-2 font-semibold">
+        <header className="flex items-center justify-between border-b px-3 py-2 md:hidden">
+          <Suspense fallback={null}>
+            <MobileNavDrawer userEmail={user.email || ""} />
+          </Suspense>
+          <Link href="/chat" className="inline-flex items-center gap-2 text-sm font-semibold">
             <Sparkles className="h-4 w-4 text-primary" />
             Knowledge Agent
           </Link>
-          <nav className="flex gap-1 text-sm">
-            <Link href="/chat" className="rounded px-2 py-1 hover:bg-accent">
-              Chat
-            </Link>
-            <Link href="/admin" className="rounded px-2 py-1 hover:bg-accent">
-              Admin
-            </Link>
-            <form action="/auth/signout" method="post">
-              <button type="submit" className="rounded px-2 py-1 hover:bg-accent">
-                Sign out
-              </button>
-            </form>
-          </nav>
+          {/* Spacer keeps the logo visually centred */}
+          <div className="h-9 w-9" aria-hidden />
         </header>
         <main className="flex-1">{children}</main>
       </div>

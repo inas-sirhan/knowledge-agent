@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
@@ -120,6 +121,9 @@ function SourcesTab() {
   const [adding, setAdding] = useState<"paste" | "url" | "upload" | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
+  const params = useSearchParams();
+  const deepLinkDoc = params.get("doc");
+  const scrolledRef = useRef(false);
 
   async function load() {
     const res = await fetch("/api/documents");
@@ -129,6 +133,20 @@ function SourcesTab() {
   useEffect(() => {
     load();
   }, []);
+
+  // If we landed here from a citation chip (?doc=<id>), auto-expand that
+  // document and scroll to it once the list has loaded.
+  useEffect(() => {
+    if (!deepLinkDoc || !docs || scrolledRef.current) return;
+    const match = docs.find((d) => d.id === deepLinkDoc);
+    if (!match) return;
+    setOpenDocId(deepLinkDoc);
+    scrolledRef.current = true;
+    // Defer scroll a tick so the chunks section has rendered.
+    setTimeout(() => {
+      document.getElementById(`doc-row-${deepLinkDoc}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }, [deepLinkDoc, docs]);
 
   async function del(id: string, title: string) {
     const ok = await confirm({
@@ -181,7 +199,7 @@ function SourcesTab() {
           ) : (
             <ul className="divide-y">
               {docs.map((d) => (
-                <li key={d.id} className="py-3">
+                <li key={d.id} id={`doc-row-${d.id}`} className="py-3 scroll-mt-4">
                   <div className="flex items-start gap-3">
                     <SourceIcon type={d.source_type} />
                     <div className="min-w-0 flex-1">
@@ -286,6 +304,13 @@ function AddSourceForm({ kind, onDone, onCancel }: { kind: "paste" | "url" | "up
     try {
       let res = await postIngest(false);
       let j = await res.json();
+      if (res.status === 402) {
+        const msg = j.message || "Out of ingest credits.";
+        setError(msg);
+        toast.error("Out of credits", msg);
+        setBusy(false);
+        return;
+      }
       if (res.status === 409 && j?.error === "duplicate" && j.duplicate) {
         const ok = await confirm({
           title: "Already in your knowledge base",
