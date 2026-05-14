@@ -14,8 +14,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect("/login");
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="hidden w-60 shrink-0 flex-col border-r bg-card p-4 md:flex">
+    <div className="flex h-screen overflow-hidden">
+      <aside className="hidden h-screen w-60 shrink-0 flex-col border-r bg-card p-4 md:flex">
         <Link href="/chat" className="mb-6 inline-flex items-center gap-2 px-2 font-semibold">
           <Sparkles className="h-5 w-5 text-primary" />
           Knowledge Agent
@@ -51,8 +51,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </form>
         </div>
       </aside>
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b px-3 py-2 md:hidden">
+      <div className="flex h-screen flex-1 flex-col overflow-hidden">
+        <header className="flex shrink-0 items-center justify-between border-b px-3 py-2 md:hidden">
           <Suspense fallback={null}>
             <MobileNavDrawer userEmail={user.email || ""} />
           </Suspense>
@@ -63,7 +63,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {/* Spacer keeps the logo visually centred */}
           <div className="h-9 w-9" aria-hidden />
         </header>
-        <main className="flex-1">{children}</main>
+        <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );
